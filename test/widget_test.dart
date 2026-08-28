@@ -36,11 +36,18 @@ Expense _e({
 /// Records deletions instead of hitting the database.
 class _SpyProvider extends ExpenseProvider {
   final List<int> deletedIds = [];
+  final List<String> restored = [];
 
   @override
   Future<void> deleteExpense(int id) async {
     deletedIds.add(id);
     debugSetExpenses(expenses.where((e) => e.id != id).toList());
+  }
+
+  @override
+  Future<void> restoreExpense(Expense expense) async {
+    restored.add(expense.item);
+    debugSetExpenses([...expenses, expense]);
   }
 }
 
@@ -54,7 +61,7 @@ void main() {
   group('HistoryScreen', () {    testWidgets('shows empty state', (tester) async {
       final provider = ExpenseProvider();
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
-      expect(find.text('No expenses yet'), findsOneWidget);
+      expect(find.text('No expenses in this range'), findsOneWidget);
     });
 
     testWidgets('lists expenses with pie chart and legend', (tester) async {
@@ -108,7 +115,7 @@ void main() {
   });
 
   group('swipe to delete', () {
-    testWidgets('deletes from history list', (tester) async {
+    testWidgets('deletes from history list with undo', (tester) async {
       final provider = _SpyProvider()
         ..debugSetExpenses([_e(id: 1), _e(id: 2, item: 'bus fare')]);
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
@@ -121,6 +128,10 @@ void main() {
       expect(find.text('eggs'), findsNothing);
       expect(find.text('bus fare'), findsOneWidget);
       expect(tester.takeException(), isNull);
+
+      await tester.tap(find.text('Undo'));
+      await tester.pumpAndSettle();
+      expect(provider.restored, ['eggs']);
     });
 
     testWidgets('deletes from home list', (tester) async {
@@ -136,6 +147,96 @@ void main() {
       expect(find.text('eggs'), findsNothing);
       expect(find.text('bus fare'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('HomeScreen totals', () {
+    testWidgets('shows today and this-month totals', (tester) async {
+      final now = DateTime.now();
+      Expense at(DateTime d) => Expense(
+            item: 'x',
+            amount: 100,
+            category: 'food',
+            createdAt: d,
+          );
+      final provider = ExpenseProvider()
+        ..debugSetExpenses([
+          at(DateTime(now.year, now.month, now.day)),
+          at(DateTime(now.year, now.month, now.day).add(const Duration(hours: 2))),
+          at(DateTime(now.year, now.month, 1)),
+          at(DateTime(now.year, now.month - 1, 15)),
+        ]);
+      await tester.pumpWidget(wrap(const HomeScreen(), provider));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Today'), findsOneWidget);
+      // Today's chip + the today group header show the same subtotal.
+      expect(find.text('200 ৳'), findsNWidgets(2));
+      expect(find.text('300 ৳'), findsOneWidget);
+    });
+  });
+
+  group('HistoryScreen filters', () {
+    final now = DateTime.now();
+
+    List<Expense> fixtures() => [
+          Expense(
+            id: 1,
+            item: 'this month eggs',
+            amount: 50,
+            category: 'food',
+            createdAt: DateTime(now.year, now.month, 3),
+          ),
+          Expense(
+            id: 2,
+            item: 'last month bus',
+            amount: 40,
+            category: 'transport',
+            createdAt: DateTime(now.year, now.month - 1, 10),
+          ),
+          Expense(
+            id: 3,
+            item: 'old rent',
+            amount: 5000,
+            category: 'rent',
+            createdAt: DateTime(now.year - 1, 6, 1),
+          ),
+        ];
+
+    testWidgets('range buttons filter list and chart', (tester) async {
+      final provider = ExpenseProvider()..debugSetExpenses(fixtures());
+      await tester.pumpWidget(wrap(const HistoryScreen(), provider));
+      await tester.pumpAndSettle();
+
+      expect(find.text('this month eggs'), findsOneWidget);
+      expect(find.text('last month bus'), findsNothing);
+      expect(find.text('old rent'), findsNothing);
+
+      await tester.tap(find.text('Last month'));
+      await tester.pumpAndSettle();
+      expect(find.text('last month bus'), findsOneWidget);
+      expect(find.text('this month eggs'), findsNothing);
+
+      await tester.tap(find.text('All time'));
+      await tester.pumpAndSettle();
+      expect(find.text('this month eggs'), findsOneWidget);
+      expect(find.text('last month bus'), findsOneWidget);
+      expect(find.text('old rent'), findsOneWidget);
+    });
+
+    testWidgets('search narrows by item name', (tester) async {
+      final provider = ExpenseProvider()..debugSetExpenses(fixtures());
+      await tester.pumpWidget(wrap(const HistoryScreen(), provider));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.search));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'eggs');
+      await tester.pumpAndSettle();
+
+      expect(find.text('this month eggs'), findsOneWidget);
+      expect(find.text('old rent'), findsNothing);
+      expect(find.text('No matches for "eggs"'), findsNothing);
     });
   });
 
@@ -199,6 +300,38 @@ void main() {
   });
 
   group('EditExpenseSheet', () {
+    testWidgets('create mode returns a new unsaved expense', (tester) async {
+      Expense? result;
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (ctx) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () async => result = await showEditExpenseSheet(ctx),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add expense'), findsOneWidget);
+
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Item'), 'tea');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Amount (৳)'), '15');
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.id, isNull);
+      expect(result!.item, 'tea');
+      expect(result!.amount, 15);
+      expect(result!.category, 'food');
+    });
     testWidgets('saves edited fields', (tester) async {
       Expense? result;
       await tester.pumpWidget(MaterialApp(

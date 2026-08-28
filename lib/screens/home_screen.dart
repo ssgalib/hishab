@@ -22,17 +22,38 @@ class _HomeScreenState extends State<HomeScreen> {
     context.read<ExpenseProvider>().loadExpenses();
   }
 
-  Future<void> _editExpense(Expense expense) async {
-    final updated = await showEditExpenseSheet(context, expense);
-    if (updated != null && mounted) {
-      await context.read<ExpenseProvider>().updateExpense(updated);
+  Future<void> _openSheet(Expense expense) async {
+    final saved = await showEditExpenseSheet(context, expense);
+    if (saved == null || !mounted) return;
+    final provider = context.read<ExpenseProvider>();
+    if (saved.id == null) {
+      await provider.addExpense(saved);
+    } else {
+      await provider.updateExpense(saved);
     }
+  }
+
+  void _deleteWithUndo(Expense expense) {
+    context.read<ExpenseProvider>().deleteExpense(expense.id!);
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Deleted "${expense.item}"'),
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () =>
+              context.read<ExpenseProvider>().restoreExpense(expense),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
-    final groups = groupExpenses(provider.expenses, _groupMode);
+    final expenses = provider.expenses;
+    final now = DateTime.now();
+    final groups = groupExpenses(expenses, _groupMode);
     // Flat render list: alternating group headers and their entries.
     final items = <Object>[
       for (final group in groups) ...[group, ...group.expenses],
@@ -53,6 +74,27 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _TotalChip(
+                    label: 'Today',
+                    amount: totalOnDate(expenses, now),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _TotalChip(
+                    label: monthName(now.month),
+                    amount: totalInMonth(expenses, now),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: SegmentedButton<DateGroupMode>(
               segments: [
                 for (final mode in DateGroupMode.values)
@@ -65,7 +107,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: provider.expenses.isEmpty
+            child: expenses.isEmpty
                 ? const Center(child: Text('No expenses yet.\nTap the mic to add one!',
                     textAlign: TextAlign.center))
                 : ListView.builder(
@@ -85,17 +127,44 @@ class _HomeScreenState extends State<HomeScreen> {
                           padding: const EdgeInsets.only(right: 16),
                           child: const Icon(Icons.delete, color: Colors.white),
                         ),
-                        onDismissed: (_) => context
-                            .read<ExpenseProvider>()
-                            .deleteExpense(expense.id!),
+                        onDismissed: (_) => _deleteWithUndo(expense),
                         child: _HomeExpenseTile(
                           expense: expense,
-                          onTap: () => _editExpense(expense),
+                          onTap: () => _openSheet(expense),
                         ),
                       );
                     },
                   ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact today/month summary chip.
+class _TotalChip extends StatelessWidget {
+  const _TotalChip({required this.label, required this.amount});
+
+  final String label;
+  final int amount;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant)),
+          Text('$amount ৳',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         ],
       ),
     );

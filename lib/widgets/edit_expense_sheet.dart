@@ -3,14 +3,23 @@ import 'package:flutter/services.dart';
 import '../models/expense.dart';
 import '../utils/categories.dart';
 
-/// Modal bottom sheet for editing an existing [Expense].
+/// Modal bottom sheet for creating or editing an [Expense].
 ///
-/// Returns the updated [Expense] when saved, null when dismissed.
-Future<Expense?> showEditExpenseSheet(BuildContext context, Expense expense) {
+/// Pass an expense with a null [Expense.id] (or nothing at all) for create
+/// mode. Returns the saved [Expense] when saved, null when dismissed.
+Future<Expense?> showEditExpenseSheet(BuildContext context, [Expense? expense]) {
   return showModalBottomSheet<Expense>(
     context: context,
     isScrollControlled: true,
-    builder: (_) => EditExpenseSheet(expense: expense),
+    builder: (_) => EditExpenseSheet(
+      expense: expense ??
+          Expense(
+            item: '',
+            amount: 0,
+            category: categories.first.name,
+            createdAt: DateTime.now(),
+          ),
+    ),
   );
 }
 
@@ -18,6 +27,8 @@ class EditExpenseSheet extends StatefulWidget {
   const EditExpenseSheet({super.key, required this.expense});
 
   final Expense expense;
+
+  bool get isCreating => expense.id == null;
 
   @override
   State<EditExpenseSheet> createState() => _EditExpenseSheetState();
@@ -36,7 +47,9 @@ class _EditExpenseSheetState extends State<EditExpenseSheet> {
     super.initState();
     _item = TextEditingController(text: widget.expense.item);
     _quantity = TextEditingController(text: widget.expense.quantity ?? '');
-    _amount = TextEditingController(text: '${widget.expense.amount}');
+    _amount = TextEditingController(
+      text: widget.expense.amount == 0 ? '' : '${widget.expense.amount}',
+    );
     _date = widget.expense.createdAt;
     _category = categories.any((c) => c.name == widget.expense.category)
         ? widget.expense.category
@@ -90,7 +103,7 @@ class _EditExpenseSheetState extends State<EditExpenseSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Edit expense',
+            Text(widget.isCreating ? 'Add expense' : 'Edit expense',
                 style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 16),
             TextFormField(

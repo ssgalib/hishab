@@ -49,6 +49,24 @@ List<ExpenseGroup> groupExpenses(
   ];
 }
 
+/// Total amount spent on the calendar day of [day].
+int totalOnDate(List<Expense> expenses, DateTime day) => expenses
+    .where((e) =>
+        e.createdAt.year == day.year &&
+        e.createdAt.month == day.month &&
+        e.createdAt.day == day.day)
+    .fold(0, (sum, e) => sum + e.amount);
+
+/// Total amount spent in the calendar month of [month].
+int totalInMonth(List<Expense> expenses, DateTime month) => expenses
+    .where((e) =>
+        e.createdAt.year == month.year &&
+        e.createdAt.month == month.month)
+    .fold(0, (sum, e) => sum + e.amount);
+
+/// Public month name for UI labels (1 -> January).
+String monthName(int month) => _monthNames[month - 1];
+
 String _titleFor(String key, DateGroupMode mode) {
   if (mode == DateGroupMode.year) return key;
   final parts = key.split('-');

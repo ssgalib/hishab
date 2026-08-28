@@ -57,4 +57,24 @@ class ExpenseProvider extends ChangeNotifier {
     await DBHelper.deleteExpense(id);
     await loadExpenses();
   }
+
+  /// Re-inserts a previously deleted [expense] (keeps its original date).
+  Future<void> restoreExpense(Expense expense) async {
+    await DBHelper.insertExpense(
+      Expense(
+        item: expense.item,
+        quantity: expense.quantity,
+        amount: expense.amount,
+        category: expense.category,
+        createdAt: expense.createdAt,
+      ),
+    );
+    await loadExpenses();
+  }
+
+  Future<void> clearAll() async {
+    _expenses = const [];
+    notifyListeners();
+    await DBHelper.clearAll();
+  }
 }

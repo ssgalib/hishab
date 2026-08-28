@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:tracker/models/expense.dart';
 import 'package:tracker/models/expense_parser.dart';
 import 'package:tracker/utils/json_repair.dart';
 
@@ -78,6 +79,18 @@ void main() {
 
     test('returns null for unparseable output', () {
       expect(ExpenseParser.fromRawJson('garbage output here'), isNull);
+    });
+
+    test('needsReview flags missing amount and unknown item', () {
+      Expense e(String item, int amount) => Expense(
+            item: item,
+            amount: amount,
+            category: 'food',
+            createdAt: DateTime(2026, 8, 29),
+          );
+      expect(ExpenseParser.needsReview(e('eggs', 50)), isFalse);
+      expect(ExpenseParser.needsReview(e('eggs', 0)), isTrue);
+      expect(ExpenseParser.needsReview(e('unknown', 50)), isTrue);
     });
   });
 }

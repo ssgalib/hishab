@@ -62,4 +62,19 @@ void main() {
   test('empty input yields no groups', () {
     expect(groupExpenses([], DateGroupMode.day), isEmpty);
   });
+
+  test('totalOnDate and totalInMonth', () {
+    final expenses = [
+      _e(2026, 8, 25, 50, hour: 9),
+      _e(2026, 8, 25, 10, hour: 20),
+      _e(2026, 8, 24, 40),
+      _e(2026, 7, 30, 40),
+    ];
+    expect(totalOnDate(expenses, DateTime(2026, 8, 25)), 60);
+    expect(totalOnDate(expenses, DateTime(2026, 8, 24)), 40);
+    expect(totalOnDate(expenses, DateTime(2026, 1, 1)), 0);
+    expect(totalInMonth(expenses, DateTime(2026, 8, 1)), 100);
+    expect(totalInMonth(expenses, DateTime(2026, 7, 15)), 40);
+    expect(totalInMonth(expenses, DateTime(2025, 8, 1)), 0);
+  });
 }

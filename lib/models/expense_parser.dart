@@ -39,6 +39,11 @@ class ExpenseParser {
     );
   }
 
+  /// Whether a parsed expense is too incomplete to save as-is: missing cost
+  /// or unrecognized item. Such entries go to the edit sheet for review.
+  static bool needsReview(Expense expense) =>
+      expense.amount <= 0 || expense.item == 'unknown';
+
   static String? _cleanString(dynamic v) {
     if (v is String && v.trim().isNotEmpty) return v.trim();
     return null;
