@@ -233,6 +233,38 @@ void main() {
       expect(result!.category, 'food');
     });
 
+    testWidgets('saves an edited date', (tester) async {
+      Expense? result;
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (ctx) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () async =>
+                    result = await showEditExpenseSheet(ctx, _e()),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.calendar_today));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('20'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Save'));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.createdAt, DateTime(2026, 8, 20));
+    });
+
     testWidgets('rejects empty item and missing amount', (tester) async {
       Expense? result;
       await tester.pumpWidget(MaterialApp(

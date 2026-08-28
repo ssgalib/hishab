@@ -27,6 +27,7 @@ class _EditExpenseSheetState extends State<EditExpenseSheet> {
   late final TextEditingController _item;
   late final TextEditingController _quantity;
   late final TextEditingController _amount;
+  late DateTime _date;
   late String _category;
   final _formKey = GlobalKey<FormState>();
 
@@ -36,6 +37,7 @@ class _EditExpenseSheetState extends State<EditExpenseSheet> {
     _item = TextEditingController(text: widget.expense.item);
     _quantity = TextEditingController(text: widget.expense.quantity ?? '');
     _amount = TextEditingController(text: '${widget.expense.amount}');
+    _date = widget.expense.createdAt;
     _category = categories.any((c) => c.name == widget.expense.category)
         ? widget.expense.category
         : categories.first.name;
@@ -49,6 +51,17 @@ class _EditExpenseSheetState extends State<EditExpenseSheet> {
     super.dispose();
   }
 
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date.isAfter(now) ? now : _date,
+      firstDate: DateTime(2000),
+      lastDate: now,
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
   void _save() {
     if (!_formKey.currentState!.validate()) return;
     Navigator.of(context).pop(
@@ -57,6 +70,7 @@ class _EditExpenseSheetState extends State<EditExpenseSheet> {
         quantity: _quantity.text.trim().isEmpty ? null : _quantity.text.trim(),
         amount: int.parse(_amount.text.trim()),
         category: _category,
+        createdAt: _date,
       ),
     );
   }
@@ -120,6 +134,24 @@ class _EditExpenseSheetState extends State<EditExpenseSheet> {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 12),
+            InkWell(
+              onTap: _pickDate,
+              borderRadius: BorderRadius.circular(4),
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Date',
+                  border: OutlineInputBorder(),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('${_date.day}/${_date.month}/${_date.year}'),
+                    const Icon(Icons.calendar_today, size: 20),
+                  ],
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             DropdownMenu<String>(
