@@ -4,6 +4,8 @@ import ai.onnxruntime.OnnxTensor
 import ai.onnxruntime.OrtEnvironment
 import ai.onnxruntime.OrtSession
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.MethodChannel
@@ -17,6 +19,10 @@ class OnnxChannel(private val context: Context, messenger: BinaryMessenger) {
     private val channel = MethodChannel(messenger, "com.expense.tracker/onnx")
     private val env = OrtEnvironment.getEnvironment()
     private val lock = ReentrantLock()
+    // MethodChannel replies must be posted on the platform main thread;
+    // calling result.success/error from a background thread loses the reply
+    // and the Dart side awaits forever.
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var session: OrtSession? = null
     private var loaded = false
 
@@ -24,17 +30,30 @@ class OnnxChannel(private val context: Context, messenger: BinaryMessenger) {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "loadModel" -> {
-                    Thread { result.success(loadModelSync()) }.start()
+                    Thread { postResult(result) { loadModelSync() } }.start()
                 }
                 "runInference" -> {
                     val inputIds = call.argument<List<Int>>("input_ids") ?: emptyList()
                     val maxNewTokens = call.argument<Int>("max_new_tokens") ?: 60
                     runInference(inputIds, maxNewTokens, result)
                 }
-                else -> result.notImplemented()
+                else -> postError(result, "notImplemented", null)
             }
         }
         Thread { loadModelSync() }.start()
+    }
+
+    private fun postResult(result: MethodChannel.Result, block: () -> Any?) {
+        try {
+            val value = block()
+            mainHandler.post { result.success(value) }
+        } catch (e: Exception) {
+            mainHandler.post { result.error("ONNX_ERROR", e.message, null) }
+        }
+    }
+
+    private fun postError(result: MethodChannel.Result, code: String, message: String?) {
+        mainHandler.post { result.error(code, message, null) }
     }
 
     private fun loadModelSync(): Boolean {
@@ -84,13 +103,19 @@ class OnnxChannel(private val context: Context, messenger: BinaryMessenger) {
                             bestId = i.toLong()
                         }
                     }
-                    if (bestId == EOS_TOKEN_ID || bestId == END_TURN_TOKEN_ID) break
+                    if (bestId == EOS_TOKEN_ID || bestId == END_TURN_TOKEN_ID) {
+                        Log.i("OnnxChannel", "decode finished at step $step with ${generated.size} tokens")
+                        break
+                    }
                     generated.add(bestId.toInt())
                     seq.add(bestId)
                 }
-                result.success(generated)
+                val out = ArrayList<Int>(generated)
+                mainHandler.post { result.success(out) }
             } catch (e: Exception) {
-                result.error("ONNX_ERROR", e.message, null)
+                Log.e("OnnxChannel", "inference failed", e)
+                val msg = e.message
+                mainHandler.post { result.error("ONNX_ERROR", msg, null) }
             }
         }.start()
     }

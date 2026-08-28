@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:permission_handler/permission_handler.dart';
-import '../channels/speech_channel.dart';
-import '../channels/onnx_channel.dart';
-import '../models/expense_parser.dart';
+import '../models/expense.dart';
 import '../providers/expense_provider.dart';
-import 'history_screen.dart';
-import 'summary_screen.dart';
+import '../utils/categories.dart';
+import '../utils/grouping.dart';
+import '../widgets/edit_expense_sheet.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,74 +14,34 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  DateGroupMode _groupMode = DateGroupMode.day;
+
   @override
   void initState() {
     super.initState();
-    OnnxChannel.loadTokenizer();
     context.read<ExpenseProvider>().loadExpenses();
   }
 
-  Future<void> _handleMicPressed() async {
-    final provider = context.read<ExpenseProvider>();
-
-    final status = await Permission.microphone.request();
-    if (!status.isGranted) {
-      provider.setStatus('Microphone permission denied');
-      return;
-    }
-
-    provider.setListening(true);
-    provider.setStatus('Listening...');
-    final spokenText = await SpeechChannel.startListening();
-    if (!mounted) return;
-    provider.setListening(false);
-
-    if (spokenText.isEmpty) {
-      provider.setStatus('No speech detected');
-      return;
-    }
-
-    provider.setStatus('Recognized: "$spokenText"\nProcessing...');
-    provider.setProcessing(true);
-
-    final rawJson = await OnnxChannel.runInference(spokenText);
-    if (!mounted) return;
-    provider.setProcessing(false);
-
-    final expense = ExpenseParser.fromRawJson(rawJson);
-    if (expense != null) {
-      await provider.addExpense(expense);
-      if (!mounted) return;
-      provider.setStatus(
-        'Saved: ${expense.item} — ${expense.amount} taka (${expense.category})',
-      );
-    } else {
-      provider.setStatus('Could not parse: $rawJson');
+  Future<void> _editExpense(Expense expense) async {
+    final updated = await showEditExpenseSheet(context, expense);
+    if (updated != null && mounted) {
+      await context.read<ExpenseProvider>().updateExpense(updated);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
+    final groups = groupExpenses(provider.expenses, _groupMode);
+    // Flat render list: alternating group headers and their entries.
+    final items = <Object>[
+      for (final group in groups) ...[group, ...group.expenses],
+    ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Expense Tracker'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            onPressed: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const HistoryScreen())),
-          ),
-          IconButton(
-            icon: const Icon(Icons.bar_chart),
-            onPressed: () => Navigator.push(context,
-              MaterialPageRoute(builder: (_) => const SummaryScreen())),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Expense Tracker')),
       body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
             padding: const EdgeInsets.all(24),
@@ -93,78 +51,109 @@ class _HomeScreenState extends State<HomeScreen> {
               style: const TextStyle(fontSize: 16),
             ),
           ),
-          GestureDetector(
-            onTap: provider.isListening || provider.isProcessing
-                ? null
-                : _handleMicPressed,
-            child: Container(
-              width: 100,
-              height: 100,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: provider.isListening
-                    ? Colors.red
-                    : provider.isProcessing
-                        ? Colors.orange
-                        : Colors.blue,
-              ),
-              child: Icon(
-                provider.isListening ? Icons.mic : Icons.mic_none,
-                color: Colors.white,
-                size: 48,
-              ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SegmentedButton<DateGroupMode>(
+              segments: [
+                for (final mode in DateGroupMode.values)
+                  ButtonSegment(value: mode, label: Text(mode.label)),
+              ],
+              selected: {_groupMode},
+              onSelectionChanged: (selection) =>
+                  setState(() => _groupMode = selection.first),
             ),
           ),
-          const SizedBox(height: 16),
-          Text(
-            provider.isListening
-                ? 'Tap to stop'
-                : provider.isProcessing
-                    ? 'Processing...'
-                    : 'Tap to speak',
-            style: const TextStyle(fontSize: 14, color: Colors.grey),
-          ),
-          const SizedBox(height: 32),
-          const Divider(),
-          const Padding(
-            padding: EdgeInsets.all(8),
-            child: Text('Recent', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
+          const SizedBox(height: 8),
           Expanded(
-            child: ListView.builder(
-              itemCount: provider.expenses.length > 10
-                  ? 10
-                  : provider.expenses.length,
-              itemBuilder: (ctx, i) {
-                final e = provider.expenses[i];
-                return ListTile(
-                  leading: _categoryIcon(e.category),
-                  title: Text(e.item),
-                  subtitle: Text(e.quantity != null
-                      ? '${e.quantity} · ${e.category}'
-                      : e.category),
-                  trailing: Text('${e.amount} ৳',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                );
-              },
-            ),
+            child: provider.expenses.isEmpty
+                ? const Center(child: Text('No expenses yet.\nTap the mic to add one!',
+                    textAlign: TextAlign.center))
+                : ListView.builder(
+                    itemCount: items.length,
+                    itemBuilder: (ctx, i) {
+                      final item = items[i];
+                      if (item is ExpenseGroup) {
+                        return _GroupHeader(group: item);
+                      }
+                      final expense = item as Expense;
+                      return Dismissible(
+                        key: ObjectKey(expense),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          color: Colors.red,
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 16),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        onDismissed: (_) => context
+                            .read<ExpenseProvider>()
+                            .deleteExpense(expense.id!),
+                        child: _HomeExpenseTile(
+                          expense: expense,
+                          onTap: () => _editExpense(expense),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _categoryIcon(String category) {
-    const icons = {
-      'food': Icons.restaurant,
-      'transport': Icons.directions_car,
-      'utilities': Icons.bolt,
-      'rent': Icons.home,
-      'medicine': Icons.medical_services,
-      'education': Icons.school,
-      'entertainment': Icons.movie,
-      'mobile': Icons.phone_android,
-    };
-    return Icon(icons[category] ?? Icons.attach_money);
+class _GroupHeader extends StatelessWidget {
+  const _GroupHeader({required this.group});
+
+  final ExpenseGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            group.title,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+          ),
+          Text('${group.subtotal} ৳',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.primary,
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeExpenseTile extends StatelessWidget {
+  const _HomeExpenseTile({required this.expense, required this.onTap});
+
+  final Expense expense;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final info = categoryInfo(expense.category);
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: info.color.withValues(alpha: 0.15),
+        foregroundColor: info.color,
+        child: Icon(info.icon, size: 20),
+      ),
+      title: Text(expense.item),
+      subtitle: Text(expense.quantity != null
+          ? '${expense.quantity} · ${info.name}'
+          : info.name),
+      trailing: Text('${expense.amount} ৳',
+          style: const TextStyle(fontWeight: FontWeight.bold)),
+      onTap: onTap,
+    );
   }
 }

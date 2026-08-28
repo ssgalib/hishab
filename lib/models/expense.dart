@@ -15,6 +15,23 @@ class Expense {
     required this.createdAt,
   });
 
+  Expense copyWith({
+    int? id,
+    String? item,
+    String? quantity,
+    int? amount,
+    String? category,
+    DateTime? createdAt,
+  }) =>
+      Expense(
+        id: id ?? this.id,
+        item: item ?? this.item,
+        quantity: quantity ?? this.quantity,
+        amount: amount ?? this.amount,
+        category: category ?? this.category,
+        createdAt: createdAt ?? this.createdAt,
+      );
+
   Map<String, dynamic> toMap() => {
     'id': id,
     'item': item,

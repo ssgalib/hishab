@@ -1,0 +1,65 @@
+import 'package:flutter_test/flutter_test.dart';
+import 'package:tracker/models/expense.dart';
+import 'package:tracker/utils/grouping.dart';
+
+Expense _e(int year, int month, int day, int amount,
+        {String item = 'x', int hour = 10}) =>
+    Expense(
+      item: item,
+      amount: amount,
+      category: 'food',
+      createdAt: DateTime(year, month, day, hour),
+    );
+
+void main() {
+  test('groups by day with subtotals, newest first', () {
+    final groups = groupExpenses([
+      _e(2026, 8, 25, 50),
+      _e(2026, 8, 24, 40),
+      _e(2026, 8, 25, 10, item: 'rice', hour: 12),
+    ], DateGroupMode.day);
+
+    expect(groups.length, 2);
+    expect(groups[0].title, '25 August 2026');
+    expect(groups[0].subtotal, 60);
+    expect(groups[0].expenses.map((e) => e.item), ['rice', 'x']);
+    expect(groups[1].title, '24 August 2026');
+    expect(groups[1].subtotal, 40);
+  });
+
+  test('groups by month', () {
+    final groups = groupExpenses([
+      _e(2026, 8, 2, 50),
+      _e(2026, 7, 30, 40),
+      _e(2026, 8, 20, 10),
+    ], DateGroupMode.month);
+
+    expect(groups.length, 2);
+    expect(groups[0].title, 'August 2026');
+    expect(groups[0].subtotal, 60);
+    expect(groups[1].title, 'July 2026');
+  });
+
+  test('groups by year', () {
+    final groups = groupExpenses([
+      _e(2025, 12, 31, 50),
+      _e(2026, 1, 1, 40),
+      _e(2026, 6, 15, 10),
+    ], DateGroupMode.year);
+
+    expect(groups.length, 2);
+    expect(groups[0].title, '2026');
+    expect(groups[0].subtotal, 50);
+    expect(groups[1].title, '2025');
+  });
+
+  test('mode labels', () {
+    expect(DateGroupMode.day.label, 'Day');
+    expect(DateGroupMode.month.label, 'Month');
+    expect(DateGroupMode.year.label, 'Year');
+  });
+
+  test('empty input yields no groups', () {
+    expect(groupExpenses([], DateGroupMode.day), isEmpty);
+  });
+}

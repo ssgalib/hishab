@@ -7,9 +7,8 @@ import 'package:tracker/database/db_helper.dart';
 import 'package:tracker/main.dart';
 import 'package:tracker/models/expense_parser.dart';
 import 'package:tracker/providers/expense_provider.dart';
-import 'package:tracker/screens/history_screen.dart';
 import 'package:tracker/screens/home_screen.dart';
-import 'package:tracker/screens/summary_screen.dart';
+import 'package:tracker/widgets/category_pie_chart.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +33,8 @@ void main() {
         reason: 'raw model output: "$raw"');
   });
 
-  testWidgets('parse -> save -> history -> summary flow', (tester) async {
+  testWidgets('parse -> save -> history (pie chart) -> edit flow',
+      (tester) async {
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => ExpenseProvider(),
@@ -44,7 +44,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Resolve the provider from the widget tree.
-    final ctx = tester.element(find.byType(MaterialApp));
+    final ctx = tester.element(find.byType(NavigationBar));
     final provider = ctx.read<ExpenseProvider>();
 
     // Run on-device inference (STT is exercised separately on physical hardware).
@@ -52,25 +52,25 @@ void main() {
     final expense = ExpenseParser.fromRawJson(raw);
     expect(expense, isNotNull, reason: 'raw: "$raw"');
     await provider.addExpense(expense!);
-
-    // Re-pump so the UI reflects the saved expense.
     await tester.pump(const Duration(milliseconds: 500));
-    expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.byIcon(Icons.history), findsOneWidget);
 
-    // History shows the saved expense.
+    // Home tab shows the grouped list with a Day/Month/Year toggle.
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is SegmentedButton), findsOneWidget);
+    expect(find.text(expense.item), findsOneWidget);
+
+    // Floating mic button hovers at the bottom right on the home tab.
+    expect(find.byTooltip('Tap to speak'), findsOneWidget);
+
+    // Switch to the History tab via the bottom navigation bar.
     await tester.tap(find.byIcon(Icons.history));
     await tester.pumpAndSettle();
-    expect(find.byType(HistoryScreen), findsOneWidget);
-    expect(find.text(expense.item), findsWidgets);
+    expect(find.byType(CategoryPieChart), findsOneWidget);
+    expect(find.text(expense.item), findsOneWidget);
 
-    // Back to home, then open the summary.
-    await tester.pageBack();
+    // Back to the home tab.
+    await tester.tap(find.byIcon(Icons.home_outlined));
     await tester.pumpAndSettle();
-    expect(find.byType(HomeScreen), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.bar_chart));
-    await tester.pumpAndSettle();
-    expect(find.byType(SummaryScreen), findsOneWidget);
+    expect(find.byWidgetPredicate((w) => w is SegmentedButton), findsOneWidget);
   });
 }

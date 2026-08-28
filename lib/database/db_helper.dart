@@ -46,6 +46,16 @@ class DBHelper {
     return db.insert('expenses', expense.toMap());
   }
 
+  static Future<int> updateExpense(Expense expense) async {
+    final db = await database;
+    return db.update(
+      'expenses',
+      expense.toMap(),
+      where: 'id = ?',
+      whereArgs: [expense.id],
+    );
+  }
+
   static Future<List<Expense>> getAllExpenses() async {
     final db = await database;
     final maps = await db.query('expenses', orderBy: 'created_at DESC');

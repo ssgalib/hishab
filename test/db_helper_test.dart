@@ -62,6 +62,30 @@ void main() {
     expect(totals['transport'], 40);
   });
 
+  test('update expense', () async {
+    final id = await DBHelper.insertExpense(Expense(
+      item: 'eggs',
+      quantity: '3 piece',
+      amount: 50,
+      category: 'food',
+      createdAt: DateTime(2026, 8, 15, 10),
+    ));
+    final stored = (await DBHelper.getAllExpenses()).single;
+    expect(stored.id, id);
+
+    await DBHelper.updateExpense(stored.copyWith(
+      item: 'eggs x6',
+      quantity: '6 piece',
+      amount: 90,
+      category: 'food',
+    ));
+
+    final updated = (await DBHelper.getAllExpenses()).single;
+    expect(updated.item, 'eggs x6');
+    expect(updated.quantity, '6 piece');
+    expect(updated.amount, 90);
+  });
+
   test('delete expense', () async {
     final id = await DBHelper.insertExpense(Expense(
       item: 'eggs',

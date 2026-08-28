@@ -44,7 +44,16 @@ class ExpenseProvider extends ChangeNotifier {
     await loadExpenses();
   }
 
+  Future<void> updateExpense(Expense expense) async {
+    await DBHelper.updateExpense(expense);
+    await loadExpenses();
+  }
+
   Future<void> deleteExpense(int id) async {
+    // Remove optimistically so the dismissed tile leaves the widget tree in
+    // the same frame as the swipe, then persist and reconcile from the DB.
+    _expenses = List.of(_expenses)..removeWhere((e) => e.id == id);
+    notifyListeners();
     await DBHelper.deleteExpense(id);
     await loadExpenses();
   }
