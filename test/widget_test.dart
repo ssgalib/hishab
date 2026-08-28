@@ -51,8 +51,7 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  group('HistoryScreen', () {
-    testWidgets('shows empty state', (tester) async {
+  group('HistoryScreen', () {    testWidgets('shows empty state', (tester) async {
       final provider = ExpenseProvider();
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
       expect(find.text('No expenses yet'), findsOneWidget);
@@ -137,6 +136,65 @@ void main() {
       expect(find.text('eggs'), findsNothing);
       expect(find.text('bus fare'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('HomeScreen grouping toggle', () {
+    final candidates = [
+      '25 August 2026', '24 August 2026', '31 December 2025',
+      'August 2026', 'July 2026', 'December 2025', '2026', '2025',
+    ];
+
+    Iterable<String> visibleTitles(WidgetTester tester) => tester
+        .widgetList<Text>(find.byWidgetPredicate(
+          (w) => w is Text && candidates.contains(w.data),
+        ))
+        .map((t) => t.data!);
+
+    Expense expenseAt(DateTime at, String item, int amount) => Expense(
+          item: item,
+          amount: amount,
+          category: 'food',
+          createdAt: at,
+        );
+
+    testWidgets('switching day/month/year regroups the list', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(800, 1800));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+
+      // loadExpenses() in HomeScreen.initState stays pending in the widget
+      // test fake-async zone, so seeding the provider directly is stable.
+      final provider = ExpenseProvider()
+        ..debugSetExpenses([
+          expenseAt(DateTime(2026, 8, 25, 10), 'rice', 50),
+          expenseAt(DateTime(2026, 8, 25, 12), 'eggs', 10),
+          expenseAt(DateTime(2026, 8, 24, 9), 'bus fare', 40),
+          expenseAt(DateTime(2026, 7, 30, 18), 'recharge', 40),
+          expenseAt(DateTime(2025, 12, 31, 23), 'old item', 50),
+        ]);
+
+      await tester.pumpWidget(wrap(const HomeScreen(), provider));
+      await tester.pumpAndSettle();
+
+      expect(
+        visibleTitles(tester),
+        ['25 August 2026', '24 August 2026', '31 December 2025'],
+      );
+
+      await tester.tap(find.text('Month'));
+      await tester.pumpAndSettle();
+      expect(visibleTitles(tester), ['August 2026', 'July 2026', 'December 2025']);
+
+      await tester.tap(find.text('Year'));
+      await tester.pumpAndSettle();
+      expect(visibleTitles(tester), ['2026', '2025']);
+
+      await tester.tap(find.text('Day'));
+      await tester.pumpAndSettle();
+      expect(
+        visibleTitles(tester),
+        ['25 August 2026', '24 August 2026', '31 December 2025'],
+      );
     });
   });
 
