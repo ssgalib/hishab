@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'channels/onnx_channel.dart';
@@ -46,8 +49,24 @@ class _AppState extends State<App> {
     }
 
     provider.setListening(true);
-    provider.setStatus('Listening...');
-    final spokenText = await SpeechChannel.startListening();
+    provider.setStatus('Listening... (tap the mic to stop)');
+    String spokenText;
+    try {
+      spokenText = await SpeechChannel.startListening().timeout(
+        const Duration(seconds: 20),
+      );
+    } on TimeoutException {
+      unawaited(SpeechChannel.stopListening());
+      if (!mounted) return;
+      provider.setListening(false);
+      provider.setStatus("Didn't hear anything. Tap the mic and try again.");
+      return;
+    } on PlatformException catch (e) {
+      if (!mounted) return;
+      provider.setListening(false);
+      provider.setStatus(_sttErrorMessage(e));
+      return;
+    }
     if (!mounted) return;
     provider.setListening(false);
 
@@ -98,6 +117,27 @@ class _AppState extends State<App> {
     provider.setStatus('Saved: ${saved.item} — ${saved.amount} taka');
   }
 
+  /// Called when the mic FAB is tapped while listening: stops the recognizer.
+  /// The pending [SpeechChannel.startListening] future then completes (or the
+  /// Dart-side timeout fires) and the flow unwinds gracefully.
+  Future<void> _stopListening() async {
+    context.read<ExpenseProvider>().setStatus('Stopping...');
+    await SpeechChannel.stopListening();
+  }
+
+  String _sttErrorMessage(PlatformException e) {
+    final code =
+        int.tryParse(e.message?.split(':').last.trim() ?? '') ?? -1;
+    return switch (code) {
+      6 => "Didn't hear anything. Tap the mic and try again.",
+      7 => "Couldn't understand that. Try speaking more clearly.",
+      8 => 'Recognizer busy — try again in a moment.',
+      1 || 2 || 4 => 'Speech service needs internet, which is unavailable.',
+      9 => 'Microphone permission missing.',
+      _ => 'Speech recognition failed (error $code).',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
@@ -129,11 +169,16 @@ class _AppState extends State<App> {
                   const SizedBox(height: 12),
                   FloatingActionButton(
                     heroTag: 'mic',
-                    onPressed:
-                        provider.isListening || provider.isProcessing
-                            ? null
+                    // While listening, tapping stops the recognizer; while
+                    // processing (model inference) the button is disabled.
+                    onPressed: provider.isProcessing
+                        ? null
+                        : provider.isListening
+                            ? _stopListening
                             : _handleMicPressed,
-                    tooltip: 'Tap to speak',
+                    tooltip: provider.isListening
+                        ? 'Tap to stop'
+                        : 'Tap to speak',
                     backgroundColor: provider.isListening
                         ? Theme.of(context).colorScheme.error
                         : provider.isProcessing
