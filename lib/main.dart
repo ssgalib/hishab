@@ -40,6 +40,10 @@ class App extends StatefulWidget {
 class _AppState extends State<App> {
   int _tab = 0;
 
+  /// Context below the Navigator, for sheets and snackbars triggered from
+  /// the voice flow (the App state's own context sits above MaterialApp).
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
   @override
   void initState() {
     super.initState();
@@ -48,7 +52,9 @@ class _AppState extends State<App> {
   }
 
   void _snack(String message, {SnackBarAction? action}) {
-    ScaffoldMessenger.of(context)
+    final ctx = _navigatorKey.currentContext;
+    if (ctx == null) return;
+    ScaffoldMessenger.of(ctx)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(message), action: action));
   }
@@ -114,7 +120,10 @@ class _AppState extends State<App> {
 
   /// Opens the review sheet for a parsed expense and saves on confirm.
   Future<void> _reviewAndSave(Expense expense, String heard) async {
-    final saved = await showEditExpenseSheet(context, expense, heard);
+    final navigatorContext = _navigatorKey.currentContext;
+    if (navigatorContext == null) return;
+    final saved =
+        await showEditExpenseSheet(navigatorContext, expense, heard);
     if (!mounted) return;
     if (saved == null) {
       _snack('Entry discarded');
@@ -124,7 +133,10 @@ class _AppState extends State<App> {
   }
 
   Future<void> _handleParseError(String heard) async {
-    final action = await showParseErrorSheet(context, heard: heard);
+    final navigatorContext = _navigatorKey.currentContext;
+    if (navigatorContext == null) return;
+    final action =
+        await showParseErrorSheet(navigatorContext, heard: heard);
     if (!mounted || action == null) return;
     if (action == ParseErrorAction.retry) {
       await _handleMicPressed();
@@ -134,7 +146,9 @@ class _AppState extends State<App> {
   }
 
   Future<void> _addManually() async {
-    final saved = await showEditExpenseSheet(context);
+    final navigatorContext = _navigatorKey.currentContext;
+    if (navigatorContext == null) return;
+    final saved = await showEditExpenseSheet(navigatorContext);
     if (saved == null || !mounted) return;
     _saveExpense(saved);
   }
@@ -169,6 +183,7 @@ class _AppState extends State<App> {
     return MaterialApp(
       title: 'Hishab',
       debugShowCheckedModeBanner: false,
+      navigatorKey: _navigatorKey,
       theme: AppTheme.light,
       home: Scaffold(
         extendBody: true,
