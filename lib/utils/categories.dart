@@ -1,26 +1,39 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+
 /// Metadata for the 8 categories the model is trained to output.
 class CategoryInfo {
   final String name;
+  final String label;
   final IconData icon;
   final Color color;
+  final Color ink;
 
-  const CategoryInfo(this.name, this.icon, this.color);
+  const CategoryInfo(this.name, this.label, this.icon, this.color, this.ink);
 }
 
 const categories = <CategoryInfo>[
-  CategoryInfo('food', Icons.restaurant, Color(0xFFEF6C00)),
-  CategoryInfo('transport', Icons.directions_car, Color(0xFF1565C0)),
-  CategoryInfo('utilities', Icons.bolt, Color(0xFF8E24AA)),
-  CategoryInfo('rent', Icons.home, Color(0xFF00838F)),
-  CategoryInfo('medicine', Icons.medical_services, Color(0xFFC62828)),
-  CategoryInfo('education', Icons.school, Color(0xFF2E7D32)),
-  CategoryInfo('entertainment', Icons.movie, Color(0xFFF9A825)),
-  CategoryInfo('mobile', Icons.phone_android, Color(0xFF5D4037)),
+  CategoryInfo('food', 'Food', Icons.restaurant, CategoryPalette.food,
+      CategoryPalette.foodInk),
+  CategoryInfo('transport', 'Transport', Icons.directions_car,
+      CategoryPalette.transport, CategoryPalette.transportInk),
+  CategoryInfo('utilities', 'Utilities', Icons.bolt, CategoryPalette.utilities,
+      CategoryPalette.utilitiesInk),
+  CategoryInfo('rent', 'Rent', Icons.home, CategoryPalette.rent,
+      CategoryPalette.rentInk),
+  CategoryInfo('medicine', 'Medicine', Icons.medical_services,
+      CategoryPalette.medicine, CategoryPalette.medicineInk),
+  CategoryInfo('education', 'Education', Icons.school,
+      CategoryPalette.education, CategoryPalette.educationInk),
+  CategoryInfo('entertainment', 'Entertainment', Icons.movie,
+      CategoryPalette.entertainment, CategoryPalette.entertainmentInk),
+  CategoryInfo('mobile', 'Mobile', Icons.phone_android, CategoryPalette.mobile,
+      CategoryPalette.mobileInk),
 ];
 
-const fallbackCategory = CategoryInfo('other', Icons.attach_money, Colors.blueGrey);
+const fallbackCategory = CategoryInfo(
+    'other', 'Other', Icons.attach_money, Colors.blueGrey, Color(0xFF37474F));
 
 CategoryInfo categoryInfo(String name) =>
     categories.firstWhere((c) => c.name == name, orElse: () => fallbackCategory);

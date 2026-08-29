@@ -1,4 +1,5 @@
 import '../models/expense.dart';
+import 'format.dart';
 
 /// How entries are grouped on the home screen.
 enum DateGroupMode { day, month, year }
@@ -23,10 +24,14 @@ class ExpenseGroup {
 
 /// Groups [expenses] (any order) by calendar day/month/year and returns the
 /// groups newest first; entries inside each group are newest first.
+///
+/// [now] drives the "Today"/"Yesterday" day labels; defaults to the real clock.
 List<ExpenseGroup> groupExpenses(
   List<Expense> expenses,
-  DateGroupMode mode,
-) {
+  DateGroupMode mode, {
+  DateTime? now,
+}) {
+  now ??= DateTime.now();
   final buckets = <String, List<Expense>>{};
   for (final e in expenses) {
     final key = switch (mode) {
@@ -43,7 +48,7 @@ List<ExpenseGroup> groupExpenses(
   return [
     for (final key in keys)
       ExpenseGroup(
-        _titleFor(key, mode),
+        _titleFor(key, mode, now),
         buckets[key]!..sort((a, b) => b.createdAt.compareTo(a.createdAt)),
       ),
   ];
@@ -64,21 +69,11 @@ int totalInMonth(List<Expense> expenses, DateTime month) => expenses
         e.createdAt.month == month.month)
     .fold(0, (sum, e) => sum + e.amount);
 
-/// Public month name for UI labels (1 -> January).
-String monthName(int month) => _monthNames[month - 1];
-
-String _titleFor(String key, DateGroupMode mode) {
+String _titleFor(String key, DateGroupMode mode, DateTime now) {
   if (mode == DateGroupMode.year) return key;
-  final parts = key.split('-');
-  final year = parts[0];
-  final month = _monthNames[int.parse(parts[1]) - 1];
-  if (mode == DateGroupMode.month) return '$month $year';
-  return '${int.parse(parts[2])} $month $year';
+  final parts = key.split('-').map(int.parse).toList();
+  if (mode == DateGroupMode.month) return '${monthName(parts[1])} ${parts[0]}';
+  return dayGroupTitle(DateTime(parts[0], parts[1], parts[2]), now);
 }
-
-const _monthNames = [
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
 
 String _two(int n) => n.toString().padLeft(2, '0');
