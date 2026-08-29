@@ -59,7 +59,12 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> completeOnboarding() async {
-    await DBHelper.setSetting('onboarding_complete', 'true');
+    try {
+      await DBHelper.setSetting('onboarding_complete', 'true');
+    } catch (_) {
+      // A failed write must not trap the user in onboarding; the flag will
+      // be re-asked next launch instead.
+    }
     _onboardingComplete = true;
     notifyListeners();
   }

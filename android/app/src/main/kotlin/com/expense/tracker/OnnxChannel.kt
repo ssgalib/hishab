@@ -63,7 +63,12 @@ class OnnxChannel(private val context: Context, messenger: BinaryMessenger) {
                 val dir = File(context.cacheDir, "models")
                 if (!dir.exists()) dir.mkdirs()
                 val modelFile = File(dir, "model.onnx")
-                if (!modelFile.exists()) {
+                val assetSize = context.assets.open("flutter_assets/assets/model/model.onnx")
+                    .use { it.available().toLong() }
+                // Re-copy when missing OR stale (e.g. after an app update
+                // ships a different model) — cacheDir survives updates.
+                if (!modelFile.exists() || modelFile.length() != assetSize) {
+                    if (modelFile.exists()) modelFile.delete()
                     context.assets.open("flutter_assets/assets/model/model.onnx").use { input ->
                         modelFile.outputStream().use { output -> input.copyTo(output) }
                     }

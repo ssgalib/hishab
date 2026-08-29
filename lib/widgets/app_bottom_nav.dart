@@ -23,32 +23,38 @@ class AppBottomNav extends StatelessWidget {
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          height: height,
           decoration: const BoxDecoration(
             color: AppColors.navFill,
             border: Border(top: BorderSide(color: AppColors.border)),
           ),
-          padding: const EdgeInsets.fromLTRB(26, 10, 26, 14),
-          child: Row(
-            children: [
-              Expanded(
-                child: _NavButton(
-                  icon: Icons.receipt_long,
-                  label: 'Home',
-                  selected: index == 0,
-                  onTap: () => onTap(0),
-                ),
+          // Keeps the tabs clear of the system gesture/nav bar.
+          child: SafeArea(
+            top: false,
+            child: Container(
+              height: height,
+              padding: const EdgeInsets.fromLTRB(26, 10, 26, 14),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _NavButton(
+                      icon: Icons.receipt_long,
+                      label: 'Home',
+                      selected: index == 0,
+                      onTap: () => onTap(0),
+                    ),
+                  ),
+                  const SizedBox(width: 88),
+                  Expanded(
+                    child: _NavButton(
+                      icon: Icons.pie_chart,
+                      label: 'History',
+                      selected: index == 1,
+                      onTap: () => onTap(1),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 88),
-              Expanded(
-                child: _NavButton(
-                  icon: Icons.pie_chart,
-                  label: 'History',
-                  selected: index == 1,
-                  onTap: () => onTap(1),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),

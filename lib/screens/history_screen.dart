@@ -162,7 +162,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return SafeArea(
       top: true,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 200),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 240),
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 10, 2, 14),

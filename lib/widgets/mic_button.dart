@@ -24,6 +24,12 @@ class _MicButtonState extends State<MicButton>
   );
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.state == MicState.listening) _pulse.repeat();
+  }
+
+  @override
   void didUpdateWidget(covariant MicButton oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.state == MicState.listening) {
@@ -47,7 +53,11 @@ class _MicButtonState extends State<MicButton>
     final child = _MicIcon(state: widget.state);
 
     return Tooltip(
-      message: listening ? 'Tap to stop' : 'Tap to speak',
+      message: listening
+          ? 'Tap to stop'
+          : processing
+              ? 'Parsing your expense…'
+              : 'Tap to speak',
       child: GestureDetector(
         onTap: processing ? null : widget.onTap,
         child: Opacity(
@@ -56,6 +66,7 @@ class _MicButtonState extends State<MicButton>
             width: 86,
             height: 86,
             child: Stack(
+              clipBehavior: Clip.none,
               alignment: Alignment.center,
               children: [
                 if (listening) ...[

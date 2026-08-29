@@ -61,8 +61,15 @@ class _AppState extends State<App> {
       ..showSnackBar(SnackBar(content: Text(message), action: action));
   }
 
-  void _saveExpense(Expense expense) {
-    context.read<ExpenseProvider>().addExpense(expense);
+  Future<void> _saveExpense(Expense expense) async {
+    try {
+      await context.read<ExpenseProvider>().addExpense(expense);
+    } catch (_) {
+      if (!mounted) return;
+      _snack("Couldn't save — please try again.");
+      return;
+    }
+    if (!mounted) return;
     _snack('Saved · ${fmtTaka(expense.amount)}');
     setState(() => _tab = 0);
   }
@@ -72,7 +79,14 @@ class _AppState extends State<App> {
 
     final status = await Permission.microphone.request();
     if (!status.isGranted) {
-      _snack('Microphone permission denied');
+      _snack(
+        status.isPermanentlyDenied
+            ? 'Microphone is off for Hishab — enable it in Settings.'
+            : 'Microphone permission denied',
+        action: status.isPermanentlyDenied
+            ? SnackBarAction(label: 'Settings', onPressed: openAppSettings)
+            : null,
+      );
       return;
     }
 
@@ -108,7 +122,16 @@ class _AppState extends State<App> {
 
     provider.setVoiceText(spokenText);
     provider.setProcessing(true);
-    final rawJson = await OnnxChannel.runInference(spokenText);
+    String rawJson;
+    try {
+      rawJson = await OnnxChannel.runInference(spokenText);
+    } catch (_) {
+      // Model load failure, OOM, ONNX error — never leave the mic wedged.
+      if (!mounted) return;
+      provider.setProcessing(false);
+      _snack("Couldn't analyze that — tap the mic and try again.");
+      return;
+    }
     if (!mounted) return;
     provider.setProcessing(false);
 
@@ -130,7 +153,7 @@ class _AppState extends State<App> {
       _snack('Entry discarded');
       return;
     }
-    _saveExpense(saved);
+    await _saveExpense(saved);
   }
 
   Future<void> _handleParseError(String heard) async {
@@ -150,7 +173,7 @@ class _AppState extends State<App> {
     if (navigatorContext == null) return;
     final saved = await showEditExpenseSheet(navigatorContext);
     if (saved == null || !mounted) return;
-    _saveExpense(saved);
+    await _saveExpense(saved);
   }
 
   /// Called when the mic is tapped while listening: stops the recognizer.

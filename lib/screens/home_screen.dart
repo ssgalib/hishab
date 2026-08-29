@@ -70,7 +70,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return SafeArea(
       top: true,
       child: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 200),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 240),
         children: [
           const _AppBar(),
           const SizedBox(height: 14),
