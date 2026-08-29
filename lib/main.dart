@@ -12,6 +12,7 @@ import 'models/expense_parser.dart';
 import 'providers/expense_provider.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/onboarding_screen.dart';
 import 'theme/app_theme.dart';
 import 'utils/format.dart';
 import 'widgets/app_bottom_nav.dart';
@@ -47,8 +48,9 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
-    // Preload the tokenizer while the app boots.
+    // Preload the tokenizer and the onboarding flag while the app boots.
     OnnxChannel.loadTokenizer();
+    context.read<ExpenseProvider>().loadOnboardingFlag();
   }
 
   void _snack(String message, {SnackBarAction? action}) {
@@ -122,8 +124,7 @@ class _AppState extends State<App> {
   Future<void> _reviewAndSave(Expense expense, String heard) async {
     final navigatorContext = _navigatorKey.currentContext;
     if (navigatorContext == null) return;
-    final saved =
-        await showEditExpenseSheet(navigatorContext, expense, heard);
+    final saved = await showEditExpenseSheet(navigatorContext, expense, heard);
     if (!mounted) return;
     if (saved == null) {
       _snack('Entry discarded');
@@ -135,8 +136,7 @@ class _AppState extends State<App> {
   Future<void> _handleParseError(String heard) async {
     final navigatorContext = _navigatorKey.currentContext;
     if (navigatorContext == null) return;
-    final action =
-        await showParseErrorSheet(navigatorContext, heard: heard);
+    final action = await showParseErrorSheet(navigatorContext, heard: heard);
     if (!mounted || action == null) return;
     if (action == ParseErrorAction.retry) {
       await _handleMicPressed();
@@ -161,8 +161,7 @@ class _AppState extends State<App> {
   }
 
   String _sttErrorMessage(PlatformException e) {
-    final code =
-        int.tryParse(e.message?.split(':').last.trim() ?? '') ?? -1;
+    final code = int.tryParse(e.message?.split(':').last.trim() ?? '') ?? -1;
     return switch (code) {
       6 => "Didn't hear anything. Tap the mic and try again.",
       7 => "Couldn't understand that. Try speaking more clearly.",
@@ -176,71 +175,88 @@ class _AppState extends State<App> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
-    final media = MediaQuery.of(context);
-    final listening = provider.isListening;
-    final processing = provider.isProcessing;
+    final onboarding = provider.onboardingComplete;
 
     return MaterialApp(
       title: 'Hishab',
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigatorKey,
       theme: AppTheme.light,
-      home: Scaffold(
-        extendBody: true,
-        body: Stack(
-          children: [
-            IndexedStack(
-              index: _tab,
-              children: const [HomeScreen(), HistoryScreen()],
-            ),
-            if (listening || processing)
-              Positioned(
-                top: media.padding.top + 8,
-                left: 20,
-                right: 20,
-                child: Align(
-                  alignment: Alignment.topCenter,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 340),
-                    child: VoiceCaption(
-                      label: listening
-                          ? 'Listening — tap to stop'
-                          : 'Parsing your expense…',
-                      text: provider.voiceText,
-                      processing: processing,
-                    ),
+      home: onboarding == null
+          ? const Scaffold(
+              backgroundColor: AppColors.bg,
+              body: SizedBox.expand(),
+            )
+          : onboarding == false
+          ? OnboardingScreen(
+              onFinish: () async {
+                await context.read<ExpenseProvider>().completeOnboarding();
+              },
+            )
+          : _mainScaffold(provider),
+    );
+  }
+
+  Widget _mainScaffold(ExpenseProvider provider) {
+    final media = MediaQuery.of(context);
+    final listening = provider.isListening;
+    final processing = provider.isProcessing;
+
+    return Scaffold(
+      extendBody: true,
+      body: Stack(
+        children: [
+          IndexedStack(
+            index: _tab,
+            children: const [HomeScreen(), HistoryScreen()],
+          ),
+          if (listening || processing)
+            Positioned(
+              top: media.padding.top + 8,
+              left: 20,
+              right: 20,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 340),
+                  child: VoiceCaption(
+                    label: listening
+                        ? 'Listening — tap to stop'
+                        : 'Parsing your expense…',
+                    text: provider.voiceText,
+                    processing: processing,
                   ),
                 ),
               ),
-            Positioned(
-              bottom: AppBottomNav.height + media.padding.bottom + 16,
-              left: 0,
-              right: 0,
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  MicButton(
-                    state: listening
-                        ? MicState.listening
-                        : processing
-                            ? MicState.processing
-                            : MicState.idle,
-                    onTap: listening ? _stopListening : _handleMicPressed,
-                  ),
-                  Positioned(
-                    left: (media.size.width - 72) / 2 - 94,
-                    top: 21,
-                    child: _TypeButton(onTap: _addManually),
-                  ),
-                ],
-              ),
             ),
-          ],
-        ),
-        bottomNavigationBar: AppBottomNav(
-          index: _tab,
-          onTap: (i) => setState(() => _tab = i),
-        ),
+          Positioned(
+            bottom: AppBottomNav.height + media.padding.bottom + 16,
+            left: 0,
+            right: 0,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                MicButton(
+                  state: listening
+                      ? MicState.listening
+                      : processing
+                      ? MicState.processing
+                      : MicState.idle,
+                  onTap: listening ? _stopListening : _handleMicPressed,
+                ),
+                Positioned(
+                  left: (media.size.width - 72) / 2 - 94,
+                  top: 21,
+                  child: _TypeButton(onTap: _addManually),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      bottomNavigationBar: AppBottomNav(
+        index: _tab,
+        onTap: (i) => setState(() => _tab = i),
       ),
     );
   }

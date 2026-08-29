@@ -16,6 +16,8 @@ void main() {
 
   setUp(() async {
     await DBHelper.reset();
+    // The app tests start past the first-run onboarding.
+    await DBHelper.setSetting('onboarding_complete', 'true');
   });
 
   tearDown(() async {

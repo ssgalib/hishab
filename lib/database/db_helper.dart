@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+
 import '../models/expense.dart';
 
 class DBHelper {
@@ -25,7 +26,7 @@ class DBHelper {
     final path = join(await getDatabasesPath(), 'expenses.db');
     return openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE expenses (
@@ -37,8 +38,38 @@ class DBHelper {
             created_at TEXT NOT NULL
           )
         ''');
+        await _createSettingsTable(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) await _createSettingsTable(db);
       },
     );
+  }
+
+  static Future<void> _createSettingsTable(Database db) async {
+    await db.execute(
+      'CREATE TABLE IF NOT EXISTS settings '
+      '(key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+    );
+  }
+
+  static Future<String?> getSetting(String key) async {
+    final db = await database;
+    final rows = await db.query(
+      'settings',
+      where: 'key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    return rows.isEmpty ? null : rows.first['value'] as String;
+  }
+
+  static Future<void> setSetting(String key, String value) async {
+    final db = await database;
+    await db.insert('settings', {
+      'key': key,
+      'value': value,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   static Future<int> insertExpense(Expense expense) async {
@@ -76,7 +107,7 @@ class DBHelper {
   static Future<Map<String, int>> getTotalByCategory() async {
     final db = await database;
     final result = await db.rawQuery(
-      'SELECT category, SUM(amount) as total FROM expenses GROUP BY category'
+      'SELECT category, SUM(amount) as total FROM expenses GROUP BY category',
     );
     return {
       for (var r in result)

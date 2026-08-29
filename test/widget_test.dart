@@ -7,6 +7,7 @@ import 'package:tracker/models/expense.dart';
 import 'package:tracker/providers/expense_provider.dart';
 import 'package:tracker/screens/history_screen.dart';
 import 'package:tracker/screens/home_screen.dart';
+import 'package:tracker/screens/onboarding_screen.dart';
 import 'package:tracker/utils/format.dart';
 import 'package:tracker/widgets/category_pie_chart.dart';
 import 'package:tracker/widgets/edit_expense_sheet.dart';
@@ -529,6 +530,70 @@ void main() {
       expect(result, isNotNull);
       expect(result!.amount, 60);
       expect(result!.category, 'transport');
+    });
+  });
+
+  group('OnboardingScreen', () {
+    Future<void> pump(WidgetTester tester, void Function() onFinish) {
+      return tester.pumpWidget(MaterialApp(
+        home: OnboardingScreen(onFinish: onFinish),
+      ));
+    }
+
+    testWidgets('walks through all steps to the ready screen',
+        (tester) async {
+      var finished = false;
+      await pump(tester, () => finished = true);
+
+      expect(find.text('Meet Hishab'), findsOneWidget);
+      expect(find.text('Get started'), findsOneWidget);
+
+      await tester.tap(find.text('Get started'));
+      await tester.pumpAndSettle();
+      expect(find.text('Your money stays on your phone.'), findsOneWidget);
+      expect(find.text('NO UPLOADS'), findsOneWidget);
+
+      await tester.tap(find.text('Continue'));
+      await tester.pump(); // flush the gesture into an animation frame
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text("Say it like you'd tell a friend."), findsOneWidget);
+      expect(find.text('TAP TO TRY IT'), findsOneWidget);
+      expect(find.text('Try: "Rickshaw to the bazar, 60 taka"'),
+          findsOneWidget);
+
+      await tester.tap(find.text('Continue'));
+      await tester.pump(); // flush the gesture into an animation frame
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Use your microphone?'), findsOneWidget);
+      expect(find.text('Allow microphone'), findsOneWidget);
+      expect(find.text('Not now'), findsOneWidget);
+
+      await tester.tap(find.text('Not now'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text("You're all set."), findsOneWidget);
+      expect(find.text('Start tracking'), findsOneWidget);
+      // Footer with dots/actions is hidden on the last step.
+      expect(find.text('Continue'), findsNothing);
+
+      await tester.tap(find.text('Start tracking'));
+      await tester.pumpAndSettle();
+      expect(finished, isTrue);
+    });
+
+    testWidgets('skip jumps straight to the end and finishes',
+        (tester) async {
+      var finished = false;
+      await pump(tester, () => finished = true);
+
+      await tester.tap(find.text('Skip'));
+      await tester.pumpAndSettle();
+      expect(find.text("You're all set."), findsOneWidget);
+      expect(finished, isFalse);
+
+      await tester.tap(find.text('Start tracking'));
+      await tester.pumpAndSettle();
+      expect(finished, isTrue);
     });
   });
 }

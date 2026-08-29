@@ -17,6 +17,14 @@ void main() {
     await DBHelper.reset();
   });
 
+  test('settings round-trip', () async {
+    expect(await DBHelper.getSetting('onboarding_complete'), isNull);
+    await DBHelper.setSetting('onboarding_complete', 'true');
+    expect(await DBHelper.getSetting('onboarding_complete'), 'true');
+    await DBHelper.setSetting('onboarding_complete', 'false');
+    expect(await DBHelper.getSetting('onboarding_complete'), 'false');
+  });
+
   test('insert and get all expenses', () async {
     await DBHelper.insertExpense(Expense(
       item: 'eggs',

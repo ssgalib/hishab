@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+
 import '../models/expense.dart';
 import '../database/db_helper.dart';
 
@@ -8,9 +9,13 @@ class ExpenseProvider extends ChangeNotifier {
   bool _isProcessing = false;
   String _voiceText = '';
 
+  /// Null while the flag is still loading from the database.
+  bool? _onboardingComplete;
+
   List<Expense> get expenses => _expenses;
   bool get isListening => _isListening;
   bool get isProcessing => _isProcessing;
+  bool? get onboardingComplete => _onboardingComplete;
 
   /// Text heard so far (partial results stream in while listening, then the
   /// final recognition when processing starts). Drives the voice caption.
@@ -40,6 +45,18 @@ class ExpenseProvider extends ChangeNotifier {
   void setVoiceText(String value) {
     if (_voiceText == value) return;
     _voiceText = value;
+    notifyListeners();
+  }
+
+  Future<void> loadOnboardingFlag() async {
+    _onboardingComplete =
+        await DBHelper.getSetting('onboarding_complete') == 'true';
+    notifyListeners();
+  }
+
+  Future<void> completeOnboarding() async {
+    await DBHelper.setSetting('onboarding_complete', 'true');
+    _onboardingComplete = true;
     notifyListeners();
   }
 
