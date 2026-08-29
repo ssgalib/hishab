@@ -1,60 +1,88 @@
-# Expense Tracker
+# Hishab · হিসাব
 
-A fully offline Android expense tracker. Speak an expense in English (e.g.
-*bought 3 eggs for 50 taka*), native Android speech recognition converts it to
-text, an on-device fine-tuned Gemma 3 270M model (ONNX Runtime) parses it into
-structured JSON, and the result is saved to a local SQLite database.
+**A fully offline, voice-first expense tracker for Android.** Speak an expense in
+plain English — *"bought 3 eggs for 50 taka"* — and an on-device AI turns it into
+a structured record. No account, no cloud, no internet. Everything stays on your phone.
 
-## Architecture
+<p align="center">
+  <img src="screenshots/06-home.png" width="200" alt="Home" />
+  <img src="screenshots/07-history.png" width="200" alt="History with category donut" />
+  <img src="screenshots/08-edit-sheet.png" width="200" alt="Edit expense sheet" />
+  <img src="screenshots/03-onboarding-voice-demo.png" width="200" alt="Onboarding voice demo" />
+  <img src="screenshots/01-onboarding-welcome.png" width="200" alt="Onboarding welcome" />
+</p>
+
+## How it works
 
 ```
-Speech -> Android SpeechRecognizer -> text -> Gemma 3 270M (ONNX, on-device)
-       -> JSON {item, quantity, amount, category} -> SQLite (sqflite) -> UI
+You speak
+    ↓
+Android SpeechRecognizer (on-device, en-US)
+    ↓
+Gemma 3 270M, fine-tuned — running locally via ONNX Runtime
+    ↓
+{ item, quantity, amount, category }
+    ↓
+SQLite (sqflite) → glass UI
 ```
 
-## Prerequisites
+The model runs entirely on the phone. Speech recognition uses Android's
+on-device recognizer. Nothing is recorded, uploaded, or synced — the privacy
+isn't a policy, it's the architecture.
 
-- Flutter SDK
-- Android SDK (minSdk 26)
-- The ONNX model (see below)
+## Features
 
-## Model
+- **Voice entry with live caption** — tap the mic, watch your words stream in,
+  review the parsed expense, save. Tap to stop, 20s timeout, friendly error recovery.
+- **Review before save** — every parsed expense opens a confirm sheet; incomplete
+  parses ("Almost there — no amount heard") land pre-filled for a quick fix. A
+  price the model drops into `quantity` is moved back to `amount` automatically.
+- **Manual entry** — a type-it sheet with amount pad, category chips, and date picker.
+- **Home dashboard** — Today / This month totals, day/month/year grouping with
+  per-group subtotals.
+- **History** — This month / Last month / All time filters, item search,
+  category donut chart with legend, CSV export via the Android share sheet,
+  clear-all behind a confirmation.
+- **Swipe to delete with undo**, everywhere.
+- **First-run onboarding** — privacy promise, an interactive mic demo, and the
+  microphone permission ask.
+- **8 fixed categories** (food, transport, utilities, rent, medicine, education,
+  entertainment, mobile), each with its own icon and color, tuned for everyday
+  spending in Bangladesh. Currency is Taka (৳), integer amounts.
 
-The fine-tuned model is hosted on Hugging Face (not in this repo):
+## Build & run
 
-https://huggingface.co/ssgalib/expense-tracker-gemma
-
-Download the FP16 ONNX model into `assets/model/`:
+Requirements: Flutter SDK, Android SDK (minSdk 26), and the ONNX model
+(~537 MB FP16, not committed to this repo):
 
 ```bash
 mkdir -p assets/model
 curl -L https://huggingface.co/ssgalib/expense-tracker-gemma/resolve/main/model.onnx \
   -o assets/model/model.onnx
+
+flutter pub get
+flutter run                # on a connected device/emulator
+flutter build apk --release
 ```
 
 The tokenizer's compact binary derivatives (`assets/tokenizer/vocab.bin`,
-`merges.bin`) are committed. They are generated from the HF `tokenizer.json`
+`merges.bin`) are committed; they are generated from the HF `tokenizer.json`
 by `scripts/preprocess_tokenizer.py`.
-
-## Build & run
-
-```bash
-flutter pub get
-flutter run                # on a connected device/emulator
-```
 
 ## Tests
 
 ```bash
-flutter test                                    # unit + widget tests
-flutter test integration_test -d <device>       # on-device E2E (real inference)
+flutter test                                # unit + widget tests
+flutter test integration_test -d <device>   # on-device E2E (real inference)
 ```
 
 ## Notes
 
-- The model is FP16 (537 MB): dynamic INT8 and weight-only INT4 quantization
-  both broke the model's output (Gemma3's soft-capping is too sensitive).
+- The model is FP16 (537 MB): INT8/INT4 quantization broke Gemma 3's
+  soft-capping, so the full-precision model ships inside the APK (~529 MB).
 - Inference runs an autoregressive greedy decode loop in Kotlin
-  (`OnnxChannel.kt`), stopping at `<end_of_turn>` (token 106).
+  (`OnnxChannel.kt`), stopping at `<end_of_turn>`.
 - The Dart side implements the Gemma BPE tokenizer (`lib/tokenizer/`) and a
   JSON repair step for occasionally-truncated model output.
+- Design system: warm parchment glass + lime accent + IBM Plex Mono, ported
+  1:1 from the OpenDesign prototypes in `Ui-Ux-Fully-Offline-Voice-first-Android.zip`.
