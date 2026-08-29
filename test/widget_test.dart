@@ -7,14 +7,29 @@ import 'package:tracker/models/expense.dart';
 import 'package:tracker/providers/expense_provider.dart';
 import 'package:tracker/screens/history_screen.dart';
 import 'package:tracker/screens/home_screen.dart';
+import 'package:tracker/utils/format.dart';
 import 'package:tracker/widgets/category_pie_chart.dart';
 import 'package:tracker/widgets/edit_expense_sheet.dart';
 
 Widget wrap(Widget child, ExpenseProvider provider) {
   return ChangeNotifierProvider<ExpenseProvider>.value(
     value: provider,
-    child: MaterialApp(home: child),
+    child: MaterialApp(home: Scaffold(body: child)),
   );
+}
+
+/// The redesigned screens put the chart + search above the ledger, so a
+/// taller-than-default surface keeps list rows inside the finder viewport.
+Future<void> useTallSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(800, 1600));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+}
+
+/// Phone-like surface for sheet tests so the category grid lays out at
+/// realistic chip sizes.
+Future<void> usePhoneSurface(WidgetTester tester) async {
+  await tester.binding.setSurfaceSize(const Size(400, 900));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
 Expense _e({
@@ -30,7 +45,7 @@ Expense _e({
       quantity: quantity,
       amount: amount,
       category: category,
-      createdAt: DateTime(2026, 8, 15),
+      createdAt: DateTime(2026, 8, 15, 10, 30),
     );
 
 /// Records deletions instead of hitting the database.
@@ -58,13 +73,15 @@ void main() {
     databaseFactory = databaseFactoryFfi;
   });
 
-  group('HistoryScreen', () {    testWidgets('shows empty state', (tester) async {
+  group('HistoryScreen', () {
+    testWidgets('shows empty state', (tester) async {
       final provider = ExpenseProvider();
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
       expect(find.text('No expenses in this range'), findsOneWidget);
     });
 
     testWidgets('lists expenses with pie chart and legend', (tester) async {
+      await useTallSurface(tester);
       final provider = ExpenseProvider()
         ..debugSetExpenses([
           _e(),
@@ -77,45 +94,50 @@ void main() {
       expect(find.byType(PieChart), findsOneWidget);
       expect(find.text('eggs'), findsOneWidget);
       expect(find.text('bus fare'), findsOneWidget);
-      expect(find.text('50 ৳'), findsOneWidget);
-      // Legend entries.
-      expect(find.text('food · 50 ৳'), findsOneWidget);
-      expect(find.text('transport · 40 ৳'), findsOneWidget);
-      // Total in the chart center.
-      expect(find.text('90 ৳'), findsOneWidget);
+      expect(find.text('৳50'), findsOneWidget);
+      // Legend entries: capitalized label + "amount · percent".
+      expect(find.text('Food'), findsOneWidget);
+      expect(find.text('৳50 · 55.6%'), findsOneWidget);
+      expect(find.text('Transport'), findsOneWidget);
+      expect(find.text('৳40 · 44.4%'), findsOneWidget);
+      expect(find.text('TOTAL IN RANGE'), findsOneWidget);
+      expect(find.text('৳90'), findsNWidgets(2)); // chart center + legend total
     });
   });
 
   group('CategoryPieChart', () {
     testWidgets('shows empty total for no data', (tester) async {
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: CategoryPieChart(expenses: const [])),
+        home: Scaffold(
+          body: Center(child: CategoryPieChart(expenses: const [])),
+        ),
       ));
-      expect(find.text('0 ৳'), findsOneWidget);
+      expect(find.text('৳0'), findsOneWidget);
     });
 
-    testWidgets('renders one section per category', (tester) async {
+    testWidgets('renders one section per category with center total',
+        (tester) async {
       await tester.pumpWidget(MaterialApp(
-        home: Scaffold(body: SingleChildScrollView(
-          child: SizedBox(
-            height: 400,
-            child: CategoryPieChart(expenses: [
-              _e(amount: 80),
-              _e(item: 'rice', amount: 30),
-              _e(item: 'bus', amount: 40, category: 'transport'),
-            ]),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              height: 300,
+              child: CategoryPieChart(expenses: [
+                _e(amount: 80),
+                _e(item: 'rice', amount: 30),
+                _e(item: 'bus', amount: 40, category: 'transport'),
+              ]),
+            ),
           ),
-        )),
+        ),
       ));
-      expect(find.text('150 ৳'), findsOneWidget);
-      // Two food slices merge into a single legend entry.
-      expect(find.text('food · 110 ৳'), findsOneWidget);
-      expect(find.text('transport · 40 ৳'), findsOneWidget);
+      expect(find.text('৳150'), findsOneWidget);
     });
   });
 
   group('swipe to delete', () {
     testWidgets('deletes from history list with undo', (tester) async {
+      await useTallSurface(tester);
       final provider = _SpyProvider()
         ..debugSetExpenses([_e(id: 1), _e(id: 2, item: 'bus fare')]);
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
@@ -135,6 +157,7 @@ void main() {
     });
 
     testWidgets('deletes from home list', (tester) async {
+      await useTallSurface(tester);
       final provider = _SpyProvider()
         ..debugSetExpenses([_e(id: 1), _e(id: 2, item: 'bus fare')]);
       await tester.pumpWidget(wrap(const HomeScreen(), provider));
@@ -152,6 +175,7 @@ void main() {
 
   group('HomeScreen totals', () {
     testWidgets('shows today and this-month totals', (tester) async {
+      await useTallSurface(tester);
       final now = DateTime.now();
       Expense at(DateTime d) => Expense(
             item: 'x',
@@ -169,10 +193,11 @@ void main() {
       await tester.pumpWidget(wrap(const HomeScreen(), provider));
       await tester.pumpAndSettle();
 
-      expect(find.text('Today'), findsOneWidget);
-      // Today's chip + the today group header show the same subtotal.
-      expect(find.text('200 ৳'), findsNWidgets(2));
-      expect(find.text('300 ৳'), findsOneWidget);
+      expect(find.text('TODAY'), findsNWidgets(2)); // summary + group header
+      expect(find.text('৳200'), findsOneWidget);
+      expect(find.text('৳300'), findsOneWidget);
+      // Group header for today shows count and subtotal.
+      expect(find.text('2 · ৳200'), findsOneWidget);
     });
   });
 
@@ -203,7 +228,19 @@ void main() {
           ),
         ];
 
-    testWidgets('range buttons filter list and chart', (tester) async {
+    Future<void> pickRange(
+      WidgetTester tester,
+      String current,
+      String target,
+    ) async {
+      await tester.tap(find.text(current));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(target).last);
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('range dropdown filters list and chart', (tester) async {
+      await useTallSurface(tester);
       final provider = ExpenseProvider()..debugSetExpenses(fixtures());
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
       await tester.pumpAndSettle();
@@ -212,43 +249,48 @@ void main() {
       expect(find.text('last month bus'), findsNothing);
       expect(find.text('old rent'), findsNothing);
 
-      await tester.tap(find.text('Last month'));
-      await tester.pumpAndSettle();
+      await pickRange(tester, 'This month', 'Last month');
       expect(find.text('last month bus'), findsOneWidget);
       expect(find.text('this month eggs'), findsNothing);
 
-      await tester.tap(find.text('All time'));
-      await tester.pumpAndSettle();
+      await pickRange(tester, 'Last month', 'All time');
       expect(find.text('this month eggs'), findsOneWidget);
       expect(find.text('last month bus'), findsOneWidget);
       expect(find.text('old rent'), findsOneWidget);
     });
 
-    testWidgets('search narrows by item name', (tester) async {
+    testWidgets('search shows matching results instead of the chart',
+        (tester) async {
+      await useTallSurface(tester);
       final provider = ExpenseProvider()..debugSetExpenses(fixtures());
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.search));
-      await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'eggs');
       await tester.pumpAndSettle();
 
       expect(find.text('this month eggs'), findsOneWidget);
       expect(find.text('old rent'), findsNothing);
-      expect(find.text('No matches for "eggs"'), findsNothing);
+      expect(find.textContaining('MATCH FOR'), findsOneWidget);
+
+      // Chart is replaced while searching.
+      expect(find.byType(CategoryPieChart), findsNothing);
+
+      await tester.enterText(find.byType(TextField), 'zzz');
+      await tester.pumpAndSettle();
+      expect(find.text('No items match “zzz”.'), findsOneWidget);
     });
   });
 
   group('HomeScreen grouping toggle', () {
-    final candidates = [
-      '25 August 2026', '24 August 2026', '31 December 2025',
-      'August 2026', 'July 2026', 'December 2025', '2026', '2025',
-    ];
+    final now = DateTime.now();
 
     Iterable<String> visibleTitles(WidgetTester tester) => tester
         .widgetList<Text>(find.byWidgetPredicate(
-          (w) => w is Text && candidates.contains(w.data),
+          (w) => w is Text &&
+              w.data != null &&
+              w.style?.letterSpacing == 1.54 &&
+              w.overflow == TextOverflow.ellipsis,
         ))
         .map((t) => t.data!);
 
@@ -274,17 +316,24 @@ void main() {
           expenseAt(DateTime(2025, 12, 31, 23), 'old item', 50),
         ]);
 
+      final dayTitles = [
+        dayGroupTitle(DateTime(2026, 8, 25), now).toUpperCase(),
+        dayGroupTitle(DateTime(2026, 8, 24), now).toUpperCase(),
+        dayGroupTitle(DateTime(2026, 7, 30), now).toUpperCase(),
+        dayGroupTitle(DateTime(2025, 12, 31), now).toUpperCase(),
+      ];
+
       await tester.pumpWidget(wrap(const HomeScreen(), provider));
       await tester.pumpAndSettle();
 
-      expect(
-        visibleTitles(tester),
-        ['25 August 2026', '24 August 2026', '31 December 2025'],
-      );
+      expect(visibleTitles(tester), dayTitles);
 
       await tester.tap(find.text('Month'));
       await tester.pumpAndSettle();
-      expect(visibleTitles(tester), ['August 2026', 'July 2026', 'December 2025']);
+      expect(
+        visibleTitles(tester),
+        ['AUGUST 2026', 'JULY 2026', 'DECEMBER 2025'],
+      );
 
       await tester.tap(find.text('Year'));
       await tester.pumpAndSettle();
@@ -292,15 +341,13 @@ void main() {
 
       await tester.tap(find.text('Day'));
       await tester.pumpAndSettle();
-      expect(
-        visibleTitles(tester),
-        ['25 August 2026', '24 August 2026', '31 December 2025'],
-      );
+      expect(visibleTitles(tester), dayTitles);
     });
   });
 
   group('EditExpenseSheet', () {
     testWidgets('create mode returns a new unsaved expense', (tester) async {
+      await usePhoneSurface(tester);
       Expense? result;
       await tester.pumpWidget(MaterialApp(
         home: Builder(
@@ -317,13 +364,15 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Add expense'), findsOneWidget);
+      expect(find.text('New expense'), findsOneWidget);
+      expect(find.text('Save expense'), findsOneWidget); // disabled label
 
-      await tester.enterText(
-          find.widgetWithText(TextFormField, 'Item'), 'tea');
-      await tester.enterText(
-          find.widgetWithText(TextFormField, 'Amount (৳)'), '15');
-      await tester.tap(find.text('Save'));
+      await tester.enterText(find.byKey(const Key('itemField')), 'tea');
+      await tester.enterText(find.byKey(const Key('amountField')), '15');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.textContaining('Save ৳'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Save ৳'));
       await tester.pumpAndSettle();
 
       expect(result, isNotNull);
@@ -332,7 +381,9 @@ void main() {
       expect(result!.amount, 15);
       expect(result!.category, 'food');
     });
+
     testWidgets('saves edited fields', (tester) async {
+      await usePhoneSurface(tester);
       Expense? result;
       await tester.pumpWidget(MaterialApp(
         home: Builder(
@@ -340,7 +391,7 @@ void main() {
             body: Center(
               child: FilledButton(
                 onPressed: () async =>
-                    result = await showEditExpenseSheet(ctx, _e()),
+                    result = await showEditExpenseSheet(ctx, _e(id: 1)),
                 child: const Text('open'),
               ),
             ),
@@ -350,13 +401,15 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(
-          find.widgetWithText(TextFormField, 'Item'), 'eggs x6');
-      await tester.enterText(
-          find.widgetWithText(TextFormField, 'Quantity'), '6 piece');
-      await tester.enterText(
-          find.widgetWithText(TextFormField, 'Amount (৳)'), '90');
-      await tester.tap(find.text('Save'));
+      expect(find.text('Edit expense'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('itemField')), 'eggs x6');
+      await tester.enterText(find.byKey(const Key('quantityField')), '6 piece');
+      await tester.enterText(find.byKey(const Key('amountField')), '90');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.textContaining('Save ৳'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Save ৳'));
       await tester.pumpAndSettle();
 
       expect(result, isNotNull);
@@ -367,6 +420,7 @@ void main() {
     });
 
     testWidgets('saves an edited date', (tester) async {
+      await useTallSurface(tester);
       Expense? result;
       await tester.pumpWidget(MaterialApp(
         home: Builder(
@@ -384,6 +438,8 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.byIcon(Icons.calendar_today));
+      await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.calendar_today));
       await tester.pumpAndSettle();
       await tester.tap(find.text('20'));
@@ -391,14 +447,16 @@ void main() {
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Save'));
+      await tester.tap(find.textContaining('Save ৳'));
       await tester.pumpAndSettle();
 
       expect(result, isNotNull);
       expect(result!.createdAt, DateTime(2026, 8, 20));
     });
 
-    testWidgets('rejects empty item and missing amount', (tester) async {
+    testWidgets('save stays disabled without item and amount',
+        (tester) async {
+      await usePhoneSurface(tester);
       Expense? result;
       await tester.pumpWidget(MaterialApp(
         home: Builder(
@@ -416,15 +474,61 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.widgetWithText(TextFormField, 'Item'), '  ');
-      await tester.enterText(
-          find.widgetWithText(TextFormField, 'Amount (৳)'), '');
-      await tester.tap(find.text('Save'));
+      await tester.enterText(find.byKey(const Key('itemField')), '  ');
+      await tester.enterText(find.byKey(const Key('amountField')), '');
       await tester.pumpAndSettle();
 
+      // Disabled button is a no-op and the sheet stays open.
+      await tester.ensureVisible(find.text('Save expense'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Save expense'), warnIfMissed: false);
+      await tester.pumpAndSettle();
       expect(result, isNull);
-      expect(find.text('Enter an item'), findsOneWidget);
-      expect(find.text('Enter an amount'), findsOneWidget);
+      expect(find.text('Save expense'), findsOneWidget);
+    });
+
+    testWidgets('voice review shows heard text and amounts hint',
+        (tester) async {
+      await usePhoneSurface(tester);
+      Expense? result;
+      await tester.pumpWidget(MaterialApp(
+        home: Builder(
+          builder: (ctx) => Scaffold(
+            body: Center(
+              child: FilledButton(
+                onPressed: () async => result = await showEditExpenseSheet(
+                  ctx,
+                  Expense(
+                    item: 'Rickshaw to the bazar',
+                    amount: 0,
+                    category: 'transport',
+                    createdAt: DateTime(2026, 8, 29),
+                  ),
+                  'took a rickshaw to the bazar',
+                ),
+                child: const Text('open'),
+              ),
+            ),
+          ),
+        ),
+      ));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Almost there'), findsOneWidget);
+      expect(find.text('“took a rickshaw to the bazar”'), findsOneWidget);
+      expect(find.text('No amount heard — add one to save.'), findsOneWidget);
+
+      await tester.enterText(find.byKey(const Key('amountField')), '60');
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.textContaining('Save ৳'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.textContaining('Save ৳'));
+      await tester.pumpAndSettle();
+
+      expect(result, isNotNull);
+      expect(result!.amount, 60);
+      expect(result!.category, 'transport');
     });
   });
 }
