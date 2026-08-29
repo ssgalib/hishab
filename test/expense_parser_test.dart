@@ -64,6 +64,43 @@ void main() {
       expect(e.category, 'utilities');
     });
 
+    test('moves a price misplaced in quantity into the amount', () {
+      // Observed model output for "Bought Books for 300 taka".
+      final e = ExpenseParser.fromRawJson(
+        '{"item": "Books", "quantity": "300 taka"}',
+      );
+      expect(e, isNotNull);
+      expect(e!.amount, 300);
+      expect(e.quantity, isNull);
+      expect(e.category, 'education');
+      expect(ExpenseParser.needsReview(e), isFalse);
+    });
+
+    test('extracts price and keeps the real quantity', () {
+      final e = ExpenseParser.fromRawJson(
+        '{"item": "rice", "quantity": "5 kg 300 taka"}',
+      );
+      expect(e!.amount, 300);
+      expect(e.quantity, '5 kg');
+    });
+
+    test('keeps plain quantities when the amount is missing', () {
+      final e = ExpenseParser.fromRawJson(
+        '{"item": "rice", "quantity": "2 kg"}',
+      );
+      expect(e!.amount, 0);
+      expect(e.quantity, '2 kg');
+      expect(ExpenseParser.needsReview(e), isTrue);
+    });
+
+    test('does not touch quantity when the amount is present', () {
+      final e = ExpenseParser.fromRawJson(
+        '{"item": "eggs", "quantity": "3", "amount": 50}',
+      );
+      expect(e!.amount, 50);
+      expect(e.quantity, '3');
+    });
+
     test('infers category from item when missing', () {
       final e = ExpenseParser.fromRawJson('{"item": "recharge"}');
       expect(e!.category, 'mobile');

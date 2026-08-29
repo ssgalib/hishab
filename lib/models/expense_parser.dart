@@ -21,9 +21,21 @@ class ExpenseParser {
 
     final item = _cleanString(map['item']);
     final amountRaw = map['amount'];
-    final amount = amountRaw is num ? amountRaw.toInt() : null;
-    final quantity = _cleanNullableString(map['quantity']);
+    int? amount = amountRaw is num ? amountRaw.toInt() : null;
+    var quantity = _cleanNullableString(map['quantity']);
     var category = _cleanString(map['category']);
+
+    // The model occasionally drops the price into `quantity` instead of
+    // `amount` (e.g. {"quantity": "300 taka"}); move it back where it
+    // belongs so the user isn't asked to re-enter a price they already said.
+    if (amount == null || amount <= 0) {
+      final price = _extractPriceFromQuantity(quantity);
+      if (price != null) {
+        amount = price.$1;
+        quantity = price.$2;
+      }
+    }
+
     if (category == null || !validCategories.contains(category)) {
       category = _inferCategory(item ?? '', quantity);
     }
@@ -37,6 +49,25 @@ class ExpenseParser {
       category: category ?? 'food',
       createdAt: DateTime.now(),
     );
+  }
+
+  static final RegExp _priceWithCurrency = RegExp(
+    r'(?:৳|taka|tk)\s*:?\s*(\d+)|(\d+)\s*(?:৳|taka|tk)',
+    caseSensitive: false,
+  );
+
+  /// Finds a currency-cued price inside a quantity string, e.g.
+  /// "300 taka" -> (300, null), "2 kg 500 taka" -> (500, "2 kg").
+  /// Returns null when no price cue is present (plain quantities such as
+  /// "2 kg" or "3" are never treated as prices).
+  static (int, String?)? _extractPriceFromQuantity(String? quantity) {
+    if (quantity == null) return null;
+    final match = _priceWithCurrency.firstMatch(quantity);
+    if (match == null) return null;
+    final value = int.tryParse(match.group(1) ?? match.group(2) ?? '');
+    if (value == null || value <= 0) return null;
+    final remaining = quantity.replaceRange(match.start, match.end, ' ').trim();
+    return (value, remaining.isEmpty ? null : remaining);
   }
 
   /// Whether a parsed expense is too incomplete to save as-is: missing cost
