@@ -6,12 +6,15 @@ class ExpenseProvider extends ChangeNotifier {
   List<Expense> _expenses = [];
   bool _isListening = false;
   bool _isProcessing = false;
-  String _statusMessage = '';
+  String _voiceText = '';
 
   List<Expense> get expenses => _expenses;
   bool get isListening => _isListening;
   bool get isProcessing => _isProcessing;
-  String get statusMessage => _statusMessage;
+
+  /// Text heard so far (partial results stream in while listening, then the
+  /// final recognition when processing starts). Drives the voice caption.
+  String get voiceText => _voiceText;
 
   @visibleForTesting
   void debugSetExpenses(List<Expense> expenses) {
@@ -34,8 +37,9 @@ class ExpenseProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setStatus(String message) {
-    _statusMessage = message;
+  void setVoiceText(String value) {
+    if (_voiceText == value) return;
+    _voiceText = value;
     notifyListeners();
   }
 

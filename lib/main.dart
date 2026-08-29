@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
+
 import 'channels/onnx_channel.dart';
 import 'channels/speech_channel.dart';
 import 'models/expense.dart';
@@ -11,7 +12,14 @@ import 'models/expense_parser.dart';
 import 'providers/expense_provider.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
+import 'theme/app_theme.dart';
+import 'utils/format.dart';
+import 'widgets/app_bottom_nav.dart';
 import 'widgets/edit_expense_sheet.dart';
+import 'widgets/glass.dart';
+import 'widgets/mic_button.dart';
+import 'widgets/parse_error_sheet.dart';
+import 'widgets/voice_caption.dart';
 
 void main() {
   runApp(
@@ -39,17 +47,30 @@ class _AppState extends State<App> {
     OnnxChannel.loadTokenizer();
   }
 
+  void _snack(String message, {SnackBarAction? action}) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message), action: action));
+  }
+
+  void _saveExpense(Expense expense) {
+    context.read<ExpenseProvider>().addExpense(expense);
+    _snack('Saved · ${fmtTaka(expense.amount)}');
+    setState(() => _tab = 0);
+  }
+
   Future<void> _handleMicPressed() async {
     final provider = context.read<ExpenseProvider>();
 
     final status = await Permission.microphone.request();
     if (!status.isGranted) {
-      provider.setStatus('Microphone permission denied');
+      _snack('Microphone permission denied');
       return;
     }
 
+    provider.setVoiceText('');
     provider.setListening(true);
-    provider.setStatus('Listening... (tap the mic to stop)');
+    SpeechChannel.onPartial = provider.setVoiceText;
     String spokenText;
     try {
       spokenText = await SpeechChannel.startListening().timeout(
@@ -59,69 +80,69 @@ class _AppState extends State<App> {
       unawaited(SpeechChannel.stopListening());
       if (!mounted) return;
       provider.setListening(false);
-      provider.setStatus("Didn't hear anything. Tap the mic and try again.");
+      _snack("Didn't hear anything. Tap the mic and try again.");
       return;
     } on PlatformException catch (e) {
       if (!mounted) return;
       provider.setListening(false);
-      provider.setStatus(_sttErrorMessage(e));
+      _snack(_sttErrorMessage(e));
       return;
+    } finally {
+      SpeechChannel.onPartial = null;
     }
     if (!mounted) return;
     provider.setListening(false);
 
     if (spokenText.isEmpty) {
-      provider.setStatus('No speech detected');
+      _snack('No speech detected');
       return;
     }
 
-    provider.setStatus('Recognized: "$spokenText"\nProcessing...');
+    provider.setVoiceText(spokenText);
     provider.setProcessing(true);
-
     final rawJson = await OnnxChannel.runInference(spokenText);
     if (!mounted) return;
     provider.setProcessing(false);
 
-    var expense = ExpenseParser.fromRawJson(rawJson);
-    expense ??= Expense(
-      item: spokenText,
-      amount: 0,
-      category: 'food',
-      createdAt: DateTime.now(),
-    );
-
-    if (ExpenseParser.needsReview(expense)) {
-      // Missing amount or item: let the user fix it before saving.
-      provider.setStatus('Review details for: "$spokenText"');
-      final saved = await showEditExpenseSheet(context, expense);
-      if (!mounted) return;
-      if (saved == null) {
-        provider.setStatus('Entry discarded');
-        return;
-      }
-      expense = saved;
+    final expense = ExpenseParser.fromRawJson(rawJson);
+    if (expense == null) {
+      await _handleParseError(spokenText);
+      return;
     }
+    await _reviewAndSave(expense, spokenText);
+  }
 
-    await provider.addExpense(expense);
+  /// Opens the review sheet for a parsed expense and saves on confirm.
+  Future<void> _reviewAndSave(Expense expense, String heard) async {
+    final saved = await showEditExpenseSheet(context, expense, heard);
     if (!mounted) return;
-    provider.setStatus(
-      'Saved: ${expense.item} — ${expense.amount} taka (${expense.category})',
-    );
+    if (saved == null) {
+      _snack('Entry discarded');
+      return;
+    }
+    _saveExpense(saved);
+  }
+
+  Future<void> _handleParseError(String heard) async {
+    final action = await showParseErrorSheet(context, heard: heard);
+    if (!mounted || action == null) return;
+    if (action == ParseErrorAction.retry) {
+      await _handleMicPressed();
+    } else {
+      await _addManually();
+    }
   }
 
   Future<void> _addManually() async {
-    final provider = context.read<ExpenseProvider>();
     final saved = await showEditExpenseSheet(context);
     if (saved == null || !mounted) return;
-    await provider.addExpense(saved);
-    provider.setStatus('Saved: ${saved.item} — ${saved.amount} taka');
+    _saveExpense(saved);
   }
 
-  /// Called when the mic FAB is tapped while listening: stops the recognizer.
+  /// Called when the mic is tapped while listening: stops the recognizer.
   /// The pending [SpeechChannel.startListening] future then completes (or the
   /// Dart-side timeout fires) and the flow unwinds gracefully.
   Future<void> _stopListening() async {
-    context.read<ExpenseProvider>().setStatus('Stopping...');
     await SpeechChannel.stopListening();
   }
 
@@ -141,71 +162,95 @@ class _AppState extends State<App> {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
+    final media = MediaQuery.of(context);
+    final listening = provider.isListening;
+    final processing = provider.isProcessing;
 
     return MaterialApp(
-      title: 'Expense Tracker',
-      theme: ThemeData(
-        colorSchemeSeed: Colors.blue,
-        useMaterial3: true,
-      ),
+      title: 'Hishab',
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.light,
       home: Scaffold(
-        body: IndexedStack(
-          index: _tab,
-          children: const [
-            HomeScreen(),
-            HistoryScreen(),
-          ],
-        ),
-        floatingActionButton: _tab == 0
-            ? Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  FloatingActionButton.small(
-                    heroTag: 'addManual',
-                    tooltip: 'Add manually',
-                    onPressed: _addManually,
-                    child: const Icon(Icons.add),
+        extendBody: true,
+        body: Stack(
+          children: [
+            IndexedStack(
+              index: _tab,
+              children: const [HomeScreen(), HistoryScreen()],
+            ),
+            if (listening || processing)
+              Positioned(
+                top: media.padding.top + 8,
+                left: 20,
+                right: 20,
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 340),
+                    child: VoiceCaption(
+                      label: listening
+                          ? 'Listening — tap to stop'
+                          : 'Parsing your expense…',
+                      text: provider.voiceText,
+                      processing: processing,
+                    ),
                   ),
-                  const SizedBox(height: 12),
-                  FloatingActionButton(
-                    heroTag: 'mic',
-                    // While listening, tapping stops the recognizer; while
-                    // processing (model inference) the button is disabled.
-                    onPressed: provider.isProcessing
-                        ? null
-                        : provider.isListening
-                            ? _stopListening
-                            : _handleMicPressed,
-                    tooltip: provider.isListening
-                        ? 'Tap to stop'
-                        : 'Tap to speak',
-                    backgroundColor: provider.isListening
-                        ? Theme.of(context).colorScheme.error
-                        : provider.isProcessing
-                            ? Colors.orange
-                            : null,
-                    child: Icon(provider.isListening
-                        ? Icons.mic
-                        : Icons.mic_none),
+                ),
+              ),
+            Positioned(
+              bottom: AppBottomNav.height + media.padding.bottom + 16,
+              left: 0,
+              right: 0,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  MicButton(
+                    state: listening
+                        ? MicState.listening
+                        : processing
+                            ? MicState.processing
+                            : MicState.idle,
+                    onTap: listening ? _stopListening : _handleMicPressed,
+                  ),
+                  Positioned(
+                    left: (media.size.width - 72) / 2 - 94,
+                    top: 21,
+                    child: _TypeButton(onTap: _addManually),
                   ),
                 ],
-              )
-            : null,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: (i) => setState(() => _tab = i),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.home_outlined),
-              selectedIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.history),
-              selectedIcon: Icon(Icons.history_rounded),
-              label: 'History',
+              ),
             ),
           ],
+        ),
+        bottomNavigationBar: AppBottomNav(
+          index: _tab,
+          onTap: (i) => setState(() => _tab = i),
+        ),
+      ),
+    );
+  }
+}
+
+class _TypeButton extends StatelessWidget {
+  const _TypeButton({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Type an expense',
+      child: GlassContainer(
+        radius: 999,
+        shadowColor: AppColors.warmShadow,
+        child: InkWell(
+          onTap: onTap,
+          customBorder: const CircleBorder(),
+          child: const SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(Icons.add, size: 20, color: AppColors.muted),
+          ),
         ),
       ),
     );
