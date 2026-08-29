@@ -28,8 +28,10 @@ class DBHelper {
       path,
       version: 2,
       onCreate: (db, version) async {
+        // IF NOT EXISTS keeps a stale database file (tables present but
+        // version marker lost) from wedging every future open.
         await db.execute('''
-          CREATE TABLE expenses (
+          CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             item TEXT NOT NULL,
             quantity TEXT,

@@ -28,7 +28,11 @@ class ExpenseProvider extends ChangeNotifier {
   }
 
   Future<void> loadExpenses() async {
-    _expenses = await DBHelper.getAllExpenses();
+    try {
+      _expenses = await DBHelper.getAllExpenses();
+    } catch (_) {
+      _expenses = const [];
+    }
     notifyListeners();
   }
 
