@@ -27,8 +27,10 @@ SQLite (sqflite) → glass UI
 ```
 
 The model runs entirely on the phone. Speech recognition uses Android's
-on-device recognizer. Nothing is recorded, uploaded, or synced — the privacy
-isn't a policy, it's the architecture.
+on-device recognizer. Expense data never touches the network — the only time
+the app uses the internet is the **one-time model download** (~513 MB from
+Hugging Face, with a terms-and-progress screen, resumable). Existing v1.0
+installs have their model migrated automatically.
 
 ## Features
 
@@ -52,22 +54,20 @@ isn't a policy, it's the architecture.
 
 ## Build & run
 
-Requirements: Flutter SDK, Android SDK (minSdk 26), and the ONNX model
-(~537 MB FP16, not committed to this repo):
+Requirements: Flutter SDK, Android SDK (minSdk 26). The APK is now a small
+shell (~110 MB fat / ~30 MB per-ABI) — the voice model is **not** bundled.
+On first run the app walks through onboarding, then a one-time setup screen
+downloads the model from
+[Hugging Face](https://huggingface.co/ssgalib/expense-tracker-gemma)
+(progress, cancel, and resume are supported). The model is stored in the
+app's internal `files/models/` directory; v1.0 installs are migrated from
+their bundled copy automatically.
 
 ```bash
-mkdir -p assets/model
-curl -L https://huggingface.co/ssgalib/expense-tracker-gemma/resolve/main/model.onnx \
-  -o assets/model/model.onnx
-
 flutter pub get
 flutter run                # on a connected device/emulator
 flutter build apk --release
 ```
-
-The tokenizer's compact binary derivatives (`assets/tokenizer/vocab.bin`,
-`merges.bin`) are committed; they are generated from the HF `tokenizer.json`
-by `scripts/preprocess_tokenizer.py`.
 
 ## Tests
 
@@ -78,11 +78,13 @@ flutter test integration_test -d <device>   # on-device E2E (real inference)
 
 ## Notes
 
-- The model is FP16 (537 MB): INT8/INT4 quantization broke Gemma 3's
-  soft-capping, so the full-precision model ships inside the APK (~529 MB).
+- The model is FP16 (~513 MB): INT8/INT4 quantization broke Gemma 3's
+  soft-capping, so the full-precision model ships via the one-time download
+  instead of the APK.
 - Inference runs an autoregressive greedy decode loop in Kotlin
   (`OnnxChannel.kt`), stopping at `<end_of_turn>`.
 - The Dart side implements the Gemma BPE tokenizer (`lib/tokenizer/`) and a
   JSON repair step for occasionally-truncated model output.
 - Design system: warm parchment glass + lime accent + IBM Plex Mono, ported
-  1:1 from the OpenDesign prototypes in `Ui-Ux-Fully-Offline-Voice-first-Android.zip`.
+  1:1 from the OpenDesign prototypes in `Ui-Ux-Fully-Offline-Voice-first-Android.zip`
+  and `hishab-model-download.html`.

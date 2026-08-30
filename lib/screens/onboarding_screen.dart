@@ -352,10 +352,10 @@ class _PrivacyStep extends StatelessWidget {
         _IconCircle(Icons.lock_outline),
         _Title('Your money stays on your phone.'),
         SizedBox(height: 12),
-        _Lead(
-          'No account. No cloud. No internet. Hishab runs fully offline — '
-          'everything you record lives only on this device.',
-        ),
+      _Lead(
+        'No account. No cloud. Hishab runs fully offline — your expenses '
+        'never leave this device.',
+      ),
         SizedBox(height: 26),
         _PrivacyRow(
           icon: Icons.mic_none,

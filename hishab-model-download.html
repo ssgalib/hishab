@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hishab — model download screen · Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+/* ─── tokens — locked system: warm parchment glass + lime, IBM Plex Mono ─── */
+:root {
+  color-scheme: light;
+  --bg:        #efe7d2;
+  --bg-deep:   #e8dcc8;
+  --desk:      #ece3cf;
+  --desk-deep: #e2d7c2;
+  --surface:   #f5f0e6;
+  --fg:        #1a1612;
+  --muted:     #9a8f7a;
+  --border:    rgba(255,255,255,0.75);
+  --accent:    #a8cc00;
+  --accent-ink:#5c7400;
+  --accent-soft: color-mix(in oklch, var(--accent) 14%, transparent);
+  --error:     #B33A2A;
+  --error-soft: color-mix(in oklch, var(--error) 12%, transparent);
+  --track:     #d9ceb8;
+  --bezel:     oklch(18% 0.01 265);
+  --font-display: 'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --font-body:    'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+  --font-mono:    'IBM Plex Mono', ui-monospace, 'SF Mono', 'Cascadia Mono', Menlo, Consolas, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; overflow-x: hidden;
+  background:
+    radial-gradient(1000px 560px at 50% -160px, color-mix(in oklch, var(--accent) 6%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--desk), var(--desk-deep));
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px; line-height: 1.5; letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+img, svg { display: block; max-width: 100%; }
+button { font: inherit; cursor: pointer; border: 0; background: none; color: inherit; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+h1,h2 { text-wrap: balance; }
+p { text-wrap: pretty; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ─── page shell ─────────────────────────────────────────────────────── */
+.page { padding: 48px 20px 72px; }
+.page-head { text-align: center; margin-bottom: 44px; }
+.page-head .eyebrow { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+.page-head h1 { font-family: var(--font-display); font-size: 26px; font-weight: 400; margin: 0 0 10px; }
+.page-head .note { font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin: 0; }
+
+.artboards { display: grid; grid-template-columns: 1fr 1fr; gap: 44px 40px; justify-items: center; max-width: 920px; margin-inline: auto; }
+@media (max-width: 980px) { .artboards { grid-template-columns: 1fr; } }
+
+.artboard { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.art-label {
+  display: flex; align-items: baseline; gap: 10px;
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted);
+}
+.art-label .art-num { color: var(--accent-ink); font-size: 11px; letter-spacing: 0.14em; }
+
+/* ─── phone chrome ───────────────────────────────────────────────────── */
+.phone {
+  position: relative; width: 402px; height: 800px;
+  background: var(--bezel); border-radius: 46px; padding: 10px;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.4), 0 0 0 1px rgba(0,0,0,0.25), 0 40px 90px -24px rgba(120,100,70,0.5);
+}
+.phone::before, .phone::after { content: ""; position: absolute; left: -2px; width: 3px; border-radius: 3px 0 0 3px; background: var(--bezel); }
+.phone::before { top: 140px; height: 60px; }
+.phone::after  { top: 240px; height: 90px; }
+.screen {
+  position: relative; width: 100%; height: 100%;
+  background:
+    radial-gradient(560px 400px at 50% -60px, color-mix(in oklch, var(--accent) 8%, transparent), transparent 62%),
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-deep) 100%);
+  border-radius: 38px; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.screen::before {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.statusbar {
+  height: 32px; flex: 0 0 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 22px; font-size: 13px; font-weight: 400; color: var(--fg);
+  position: relative; z-index: 8;
+}
+.statusbar .sb-icons { display: flex; align-items: center; gap: 6px; }
+.statusbar svg { width: 16px; height: 16px; }
+.gesturebar { height: 22px; flex: 0 0 22px; display: grid; place-items: center; }
+.gesturebar::before { content: ""; width: 120px; height: 4px; border-radius: 2px; background: color-mix(in oklch, var(--fg) 22%, transparent); }
+
+.app { flex: 1; position: relative; z-index: 2; overflow: hidden; }
+
+/* ─── modal content ──────────────────────────────────────────────────── */
+.modal {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center;
+  padding: 40px 24px 230px;
+  overflow-y: auto; scrollbar-width: none;
+}
+.modal::-webkit-scrollbar { display: none; }
+
+.icon-frame {
+  width: 96px; height: 96px; border-radius: 30px; overflow: hidden;
+  background: rgba(255,252,245,0.55);
+  border: 1px solid rgba(255,255,255,0.75);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.85), 0 4px 24px rgba(180,160,120,0.12);
+  margin-bottom: 24px;
+}
+.icon-frame img { width: 100%; height: 100%; }
+
+.modal h1 { font-family: var(--font-display); font-size: 22px; font-weight: 400; margin: 0 0 10px; letter-spacing: -0.01em; }
+.modal .sub { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin: 0 0 26px; max-width: 32ch; line-height: 1.6; }
+
+/* ─── info rows ──────────────────────────────────────────────────────── */
+.info-list { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.info-row {
+  display: flex; gap: 14px; align-items: center; text-align: left;
+  background: rgba(255,252,245,0.55);
+  border: 1px solid rgba(255,255,255,0.75);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  border-radius: 14px; padding: 13px 14px;
+  box-shadow: 0 4px 24px rgba(180,160,120,0.12);
+}
+.info-ic {
+  width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: color-mix(in oklch, var(--accent) 14%, transparent);
+  font-size: 18px; line-height: 1;
+}
+.info-label { color: var(--fg); font-weight: 500; font-size: 13px; }
+.info-sub { color: var(--muted); font-weight: 400; font-size: 11px; margin-top: 2px; line-height: 1.45; }
+
+/* ─── bottom action area ─────────────────────────────────────────────── */
+.action {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+  padding: 14px 20px 30px;
+}
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 100%; height: 52px; border-radius: 14px;
+  font-family: var(--font-mono); font-size: 14px; font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.05s ease;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary { background: var(--accent); color: var(--fg); box-shadow: 0 4px 14px rgba(168,204,0,0.3); }
+.btn-primary:hover { background: color-mix(in oklch, var(--accent) 85%, black); }
+.btn-later {
+  width: 100%; text-align: center; padding: 12px 0 4px;
+  font-family: var(--font-mono); font-size: 13px; color: var(--muted);
+  transition: color 0.15s ease;
+}
+.btn-later:hover { color: var(--fg); }
+
+.progress { height: 6px; border-radius: 4px; background: var(--track); overflow: hidden; }
+.progress .fill { height: 100%; border-radius: 4px; background: var(--accent); }
+.progress.dl .fill { width: 40%; }
+.progress.done .fill { width: 100%; box-shadow: 0 0 8px rgba(168,204,0,0.4); }
+.dl-text { font-family: var(--font-mono); font-size: 12px; color: var(--muted); text-align: center; margin-top: 12px; }
+.cancel {
+  width: 100%; text-align: center; padding: 12px 0 4px;
+  font-family: var(--font-mono); font-size: 13px; color: var(--muted);
+  transition: color 0.15s ease;
+}
+.cancel:hover { color: var(--fg); }
+.ready {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  margin-top: 12px; color: var(--accent-ink);
+  font-family: var(--font-mono); font-size: 13px; font-weight: 500;
+}
+.ready .chk { font-size: 16px; line-height: 1; }
+.err-msg { font-family: var(--font-mono); font-size: 12px; color: var(--error); text-align: center; line-height: 1.5; padding: 2px 4px 0; }
+.btn-retry {
+  width: 100%; height: 52px; border-radius: 14px; margin-top: 12px;
+  border: 1px solid var(--error); color: var(--error);
+  font-family: var(--font-mono); font-size: 14px; font-weight: 500;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+.btn-retry:hover { background: var(--error-soft); }
+
+@media (max-width: 440px) {
+  .phone { width: 100%; max-width: 402px; padding: 8px; border-radius: 34px; }
+  .phone::before, .phone::after { display: none; }
+  .screen { border-radius: 28px; }
+  .statusbar { padding: 0 16px; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="page-head" data-od-id="page-head">
+    <p class="eyebrow">Hishab · Model download</p>
+    <h1>One-time setup — four states</h1>
+    <p class="note">The AI voice model is downloaded once and runs entirely on this device.</p>
+  </header>
+
+  <div class="artboards">
+
+    <!-- ═══ ARTBOARD 1 · IDLE ═══ -->
+    <figure class="artboard" data-od-id="artboard-idle">
+      <figcaption class="art-label"><span class="art-num">01</span> Idle</figcaption>
+      <div class="phone" aria-label="Idle state">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8h2l2-5 4 16 3-9 2 5h7"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 16 0"/><path d="M8 15a4 4 0 0 1 8 0"/><path d="M11 18h2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 15h2v4H3zM7 11h2v8H7zM11 7h2v12h-2zM15 10h2v9h-2z"/></svg>
+            </span>
+          </div>
+          <div class="app">
+            <div class="modal">
+              <div class="icon-frame"><img src="hishab-icon.svg" alt="Hishab app icon" width="96" height="96" /></div>
+              <h1 data-od-id="setup-heading">One-time setup</h1>
+              <p class="sub">To understand your voice, Hishab needs a small AI model. It runs entirely on your phone — never leaves your device.</p>
+              <div class="info-list" data-od-id="info-list">
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">📦</span>
+                  <div>
+                    <div class="info-label">~537 MB</div>
+                    <div class="info-sub">Downloaded once, stored on device</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🌐</span>
+                  <div>
+                    <div class="info-label">Wi-Fi recommended</div>
+                    <div class="info-sub">Mobile data will work but check your plan</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🔒</span>
+                  <div>
+                    <div class="info-label">Stays on this device</div>
+                    <div class="info-sub">No account or cloud needed</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="action" data-od-id="action-idle">
+              <button class="btn btn-primary">Download model — free</button>
+              <button class="btn-later">I'll do this later</button>
+            </div>
+          </div>
+          <div class="gesturebar"></div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ═══ ARTBOARD 2 · DOWNLOADING ═══ -->
+    <figure class="artboard" data-od-id="artboard-downloading">
+      <figcaption class="art-label"><span class="art-num">02</span> Downloading</figcaption>
+      <div class="phone" aria-label="Downloading state">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8h2l2-5 4 16 3-9 2 5h7"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 16 0"/><path d="M8 15a4 4 0 0 1 8 0"/><path d="M11 18h2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 15h2v4H3zM7 11h2v8H7zM11 7h2v12h-2zM15 10h2v9h-2z"/></svg>
+            </span>
+          </div>
+          <div class="app">
+            <div class="modal">
+              <div class="icon-frame"><img src="hishab-icon.svg" alt="Hishab app icon" width="96" height="96" /></div>
+              <h1>One-time setup</h1>
+              <p class="sub">To understand your voice, Hishab needs a small AI model. It runs entirely on your phone — never leaves your device.</p>
+              <div class="info-list">
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">📦</span>
+                  <div>
+                    <div class="info-label">~537 MB</div>
+                    <div class="info-sub">Downloaded once, stored on device</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🌐</span>
+                  <div>
+                    <div class="info-label">Wi-Fi recommended</div>
+                    <div class="info-sub">Mobile data will work but check your plan</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🔒</span>
+                  <div>
+                    <div class="info-label">Stays on this device</div>
+                    <div class="info-sub">No account or cloud needed</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="action" data-od-id="action-downloading">
+              <div class="progress dl" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+              <p class="dl-text num">Downloading… 214 MB / 537 MB</p>
+              <button class="cancel">Cancel</button>
+            </div>
+          </div>
+          <div class="gesturebar"></div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ═══ ARTBOARD 3 · COMPLETE ═══ -->
+    <figure class="artboard" data-od-id="artboard-complete">
+      <figcaption class="art-label"><span class="art-num">03</span> Complete</figcaption>
+      <div class="phone" aria-label="Complete state">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8h2l2-5 4 16 3-9 2 5h7"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 16 0"/><path d="M8 15a4 4 0 0 1 8 0"/><path d="M11 18h2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 15h2v4H3zM7 11h2v8H7zM11 7h2v12h-2zM15 10h2v9h-2z"/></svg>
+            </span>
+          </div>
+          <div class="app">
+            <div class="modal">
+              <div class="icon-frame"><img src="hishab-icon.svg" alt="Hishab app icon" width="96" height="96" /></div>
+              <h1>One-time setup</h1>
+              <p class="sub">To understand your voice, Hishab needs a small AI model. It runs entirely on your phone — never leaves your device.</p>
+              <div class="info-list">
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">📦</span>
+                  <div>
+                    <div class="info-label">~537 MB</div>
+                    <div class="info-sub">Downloaded once, stored on device</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🌐</span>
+                  <div>
+                    <div class="info-label">Wi-Fi recommended</div>
+                    <div class="info-sub">Mobile data will work but check your plan</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🔒</span>
+                  <div>
+                    <div class="info-label">Stays on this device</div>
+                    <div class="info-sub">No account or cloud needed</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="action" data-od-id="action-complete">
+              <div class="progress done" role="progressbar" aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"><div class="fill"></div></div>
+              <div class="ready"><span class="chk">✓</span><span>Model ready</span></div>
+            </div>
+          </div>
+          <div class="gesturebar"></div>
+        </div>
+      </div>
+    </figure>
+
+    <!-- ═══ ARTBOARD 4 · ERROR ═══ -->
+    <figure class="artboard" data-od-id="artboard-error">
+      <figcaption class="art-label"><span class="art-num">04</span> Error</figcaption>
+      <div class="phone" aria-label="Error state">
+        <div class="screen">
+          <div class="statusbar">
+            <span>9:41</span>
+            <span class="sb-icons">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8h2l2-5 4 16 3-9 2 5h7"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12a8 8 0 0 1 16 0"/><path d="M8 15a4 4 0 0 1 8 0"/><path d="M11 18h2"/></svg>
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 15h2v4H3zM7 11h2v8H7zM11 7h2v12h-2zM15 10h2v9h-2z"/></svg>
+            </span>
+          </div>
+          <div class="app">
+            <div class="modal">
+              <div class="icon-frame"><img src="hishab-icon.svg" alt="Hishab app icon" width="96" height="96" /></div>
+              <h1>One-time setup</h1>
+              <p class="sub">To understand your voice, Hishab needs a small AI model. It runs entirely on your phone — never leaves your device.</p>
+              <div class="info-list">
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">📦</span>
+                  <div>
+                    <div class="info-label">~537 MB</div>
+                    <div class="info-sub">Downloaded once, stored on device</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🌐</span>
+                  <div>
+                    <div class="info-label">Wi-Fi recommended</div>
+                    <div class="info-sub">Mobile data will work but check your plan</div>
+                  </div>
+                </div>
+                <div class="info-row">
+                  <span class="info-ic" aria-hidden="true">🔒</span>
+                  <div>
+                    <div class="info-label">Stays on this device</div>
+                    <div class="info-sub">No account or cloud needed</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="action" data-od-id="action-error">
+              <p class="err-msg">Download failed. Check your connection and try again.</p>
+              <button class="btn-retry">Retry</button>
+            </div>
+          </div>
+          <div class="gesturebar"></div>
+        </div>
+      </div>
+    </figure>
+
+  </div>
+</div>
+</body>
+</html>

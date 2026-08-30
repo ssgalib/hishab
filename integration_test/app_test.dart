@@ -8,6 +8,7 @@ import 'package:tracker/main.dart';
 import 'package:tracker/models/expense_parser.dart';
 import 'package:tracker/providers/expense_provider.dart';
 import 'package:tracker/screens/home_screen.dart';
+import 'package:tracker/services/model_service.dart';
 import 'package:tracker/widgets/app_bottom_nav.dart';
 import 'package:tracker/widgets/category_pie_chart.dart';
 
@@ -24,8 +25,16 @@ void main() {
     await DBHelper.reset();
   });
 
+  Future<void> skipWithoutModel() async {
+    if (!await ModelService.isDownloaded()) {
+      markTestSkipped(
+          'voice model not present on this device — download it once in-app');
+    }
+  }
+
   testWidgets('ONNX inference produces a parseable expense on device',
       (tester) async {
+    await skipWithoutModel();
     await OnnxChannel.loadTokenizer();
 
     final raw = await OnnxChannel.runInference('bought 3 eggs for 50 taka');
@@ -38,6 +47,7 @@ void main() {
 
   testWidgets('parse -> save -> history (pie chart) -> edit flow',
       (tester) async {
+    await skipWithoutModel();
     await tester.pumpWidget(
       ChangeNotifierProvider(
         create: (_) => ExpenseProvider(),

@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+    <!-- Only used for the one-time voice-model download from Hugging Face;
+         expense data never touches the network. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="Hishab"
         android:name="${applicationName}"

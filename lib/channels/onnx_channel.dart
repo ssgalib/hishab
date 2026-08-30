@@ -17,6 +17,15 @@ class OnnxChannel {
 
   static GemmaBpeTokenizer? _tokenizer;
 
+  /// Tells the native side where the downloaded model lives. Call once at
+  /// boot and again after a fresh download. Time-limited so a wedged
+  /// platform channel can never stall boot (the message still lands).
+  static Future<void> setModelPath(String path) {
+    return _channel
+        .invokeMethod('setModelPath', {'path': path})
+        .timeout(const Duration(seconds: 3), onTimeout: () => null);
+  }
+
   static Future<void> loadTokenizer() async {
     _tokenizer ??= await GemmaBpeTokenizer.load();
   }

@@ -23,6 +23,11 @@ abstract final class AppColors {
   // Danger.
   static const danger = Color(0xFFBE222A);
 
+  // Model-download screen tokens (from the setup prototype).
+  static const progressTrack = Color(0xFFD9CEB8);
+  static const downloadError = Color(0xFFB33A2A);
+  static const downloadErrorSoft = Color(0x1FB33A2A);
+
   // Glass fills (white-tinted cream at the prototype's alphas).
   static const glassFill = Color(0x8CFFFCF5); // rgba(255,252,245,.55)
   static const glassFillStrong = Color(0xB3FFFCF5); // caption .70

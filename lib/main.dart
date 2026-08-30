@@ -12,6 +12,7 @@ import 'models/expense_parser.dart';
 import 'providers/expense_provider.dart';
 import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
+import 'screens/model_setup_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'theme/app_theme.dart';
 import 'utils/format.dart';
@@ -48,9 +49,12 @@ class _AppState extends State<App> {
   @override
   void initState() {
     super.initState();
-    // Preload the tokenizer and the onboarding flag while the app boots.
+    // Preload the tokenizer, the onboarding flag, and the model state while
+    // the app boots.
     OnnxChannel.loadTokenizer();
-    context.read<ExpenseProvider>().loadOnboardingFlag();
+    final provider = context.read<ExpenseProvider>();
+    provider.loadOnboardingFlag();
+    provider.initModel();
   }
 
   void _snack(String message, {SnackBarAction? action}) {
@@ -199,31 +203,46 @@ class _AppState extends State<App> {
   Widget build(BuildContext context) {
     final provider = context.watch<ExpenseProvider>();
     final onboarding = provider.onboardingComplete;
+    final showSetup =
+        onboarding == true && !provider.modelReady && !provider.modelLater;
 
     return MaterialApp(
       title: 'Hishab',
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigatorKey,
       theme: AppTheme.light,
-      home: onboarding == null
+      home: onboarding == null || provider.modelState == ModelState.checking
           ? const Scaffold(
               backgroundColor: AppColors.bg,
               body: SizedBox.expand(),
             )
           : onboarding == false
-          ? OnboardingScreen(
-              onFinish: () async {
-                await context.read<ExpenseProvider>().completeOnboarding();
-              },
-            )
-          : _mainScaffold(provider),
+              ? OnboardingScreen(onFinish: _finishOnboarding)
+              : showSetup
+                  ? ModelSetupScreen()
+                  : _mainScaffold(provider),
     );
+  }
+
+  void _finishOnboarding() {
+    context.read<ExpenseProvider>().completeOnboarding();
   }
 
   Widget _mainScaffold(ExpenseProvider provider) {
     final media = MediaQuery.of(context);
     final listening = provider.isListening;
     final processing = provider.isProcessing;
+    final modelReady = provider.modelReady;
+
+    void openModelSetup() {
+      final navigatorContext = _navigatorKey.currentContext;
+      if (navigatorContext == null) return;
+      Navigator.of(navigatorContext).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const ModelSetupScreen(popWhenReady: true),
+        ),
+      );
+    }
 
     return Scaffold(
       extendBody: true,
@@ -265,7 +284,11 @@ class _AppState extends State<App> {
                       : processing
                       ? MicState.processing
                       : MicState.idle,
-                  onTap: listening ? _stopListening : _handleMicPressed,
+                  onTap: modelReady
+                      ? (listening
+                          ? _stopListening
+                          : _handleMicPressed)
+                      : openModelSetup,
                 ),
                 Positioned(
                   left: (media.size.width - 72) / 2 - 94,

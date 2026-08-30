@@ -386,7 +386,7 @@ class _EmptyState extends StatelessWidget {
                 ),
                 TextSpan(
                   text:
-                      '. No account, no internet — everything stays on this phone.',
+                      '. No account, no cloud — everything stays on this phone.',
                 ),
               ]),
               textAlign: TextAlign.center,

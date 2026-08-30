@@ -1,7 +1,7 @@
 name: tracker
 description: "Offline expense tracker with on-device speech + Gemma3 parsing."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.13.0
@@ -12,6 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   sqflite: ^2.3.0
   path: ^1.9.0
+  path_provider: ^2.1.0
   provider: ^6.1.0
   permission_handler: ^11.0.0
   fl_chart: ^1.2.0
@@ -37,7 +38,6 @@ flutter_launcher_icons:
 flutter:
   uses-material-design: true
   assets:
-    - assets/model/
     - assets/tokenizer/
     - assets/hishab-icon.png
   fonts:

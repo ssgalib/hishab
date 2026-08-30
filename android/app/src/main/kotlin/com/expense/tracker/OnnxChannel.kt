@@ -26,9 +26,27 @@ class OnnxChannel(private val context: Context, messenger: BinaryMessenger) {
     private var session: OrtSession? = null
     private var loaded = false
 
+    @Volatile
+    private var modelPath: String? = null
+
+    private fun resolveModelFile(): File {
+        val custom = modelPath
+        if (custom != null) return File(custom)
+        return File(File(context.filesDir, "models"), "model.onnx")
+    }
+
     init {
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
+                "setModelPath" -> {
+                    val path = call.argument<String>("path")
+                    if (path.isNullOrBlank()) {
+                        postError(result, "ONNX_ERROR", "missing model path")
+                    } else {
+                        lock.withLock { modelPath = path }
+                        postResult(result) { true }
+                    }
+                }
                 "loadModel" -> {
                     Thread { postResult(result) { loadModelSync() } }.start()
                 }
@@ -60,18 +78,20 @@ class OnnxChannel(private val context: Context, messenger: BinaryMessenger) {
         lock.withLock {
             if (loaded) return true
             return try {
-                val dir = File(context.cacheDir, "models")
-                if (!dir.exists()) dir.mkdirs()
-                val modelFile = File(dir, "model.onnx")
-                val assetSize = context.assets.open("flutter_assets/assets/model/model.onnx")
-                    .use { it.available().toLong() }
-                // Re-copy when missing OR stale (e.g. after an app update
-                // ships a different model) — cacheDir survives updates.
-                if (!modelFile.exists() || modelFile.length() != assetSize) {
-                    if (modelFile.exists()) modelFile.delete()
-                    context.assets.open("flutter_assets/assets/model/model.onnx").use { input ->
-                        modelFile.outputStream().use { output -> input.copyTo(output) }
-                    }
+                val modelFile = resolveModelFile()
+                File(modelFile.parent).mkdirs()
+
+                // v1.0 shipped the model inside the APK and cached it under
+                // cacheDir; move that copy over so existing users don't
+                // re-download 537 MB. Only for the default location.
+                if (!modelFile.exists() && modelPath == null) {
+                    val legacy = File(context.cacheDir, "models/model.onnx")
+                    if (legacy.exists()) legacy.renameTo(modelFile)
+                }
+
+                if (!modelFile.exists()) {
+                    Log.w("OnnxChannel", "model file not present yet — waiting for download")
+                    return false
                 }
                 val options = OrtSession.SessionOptions()
                 options.setIntraOpNumThreads(4)
