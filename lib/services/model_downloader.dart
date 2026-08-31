@@ -12,9 +12,10 @@ class ModelDownloader {
   static const modelUrl =
       'https://huggingface.co/ssgalib/expense-tracker-gemma/resolve/main/model.onnx';
 
-  /// Base URL of the speech (SenseVoice) model files on Hugging Face.
+  /// Base URL of the speech (Parakeet TDT 0.6B v2) model files on
+  /// Hugging Face — the accuracy leader of open on-device English ASR.
   static const speechBaseUrl =
-      'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main';
+      'https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/resolve/main';
 
   /// Download [url] to [savePath].
   ///

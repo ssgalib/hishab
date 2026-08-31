@@ -95,10 +95,10 @@ class SherpaSpeech {
       _offline = sherpa.OfflineRecognizer(
         sherpa.OfflineRecognizerConfig(
           model: sherpa.OfflineModelConfig(
-            senseVoice: sherpa.OfflineSenseVoiceModelConfig(
-              model: '$dir/model.int8.onnx',
-              language: 'en',
-              useInverseTextNormalization: true,
+            transducer: sherpa.OfflineTransducerModelConfig(
+              encoder: '$dir/encoder.int8.onnx',
+              decoder: '$dir/decoder.int8.onnx',
+              joiner: '$dir/joiner.int8.onnx',
             ),
             tokens: '$dir/tokens.txt',
             numThreads: 2,
@@ -131,6 +131,12 @@ class SherpaSpeech {
     final recorder = _recorder = AudioRecorder();
 
     final micStream = await recorder.startStream(const RecordConfig(
+      androidConfig: AndroidRecordConfig(
+        // The source Google's own recognizer uses: noise suppression and
+        // automatic gain control tuned for ASR. Raw MIC audio is far too
+        // fragile for accented speech at arm's length.
+        audioSource: AndroidAudioSource.voiceRecognition,
+      ),
       encoder: AudioEncoder.pcm16bits,
       sampleRate: 16000,
       numChannels: 1,

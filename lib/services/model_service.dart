@@ -15,9 +15,15 @@ class ModelService {
   static const modelDirName = 'models';
   static const speechDirName = 'speech';
 
-  /// The two files that make up the SenseVoice Small speech model.
+  /// Which speech model is active. Swapping models means changing this id,
+  /// the file list, and the base URL in [ModelDownloader].
+  static const speechModelId = 'nemo-parakeet-tdt-0.6b-v2-int8';
+
+  /// The files that make up the active speech model.
   static const speechFiles = [
-    'model.int8.onnx',
+    'encoder.int8.onnx',
+    'decoder.int8.onnx',
+    'joiner.int8.onnx',
     'tokens.txt',
   ];
 
@@ -34,12 +40,13 @@ class ModelService {
     return '$_cachedDir/$modelDirName/$modelFileName';
   }
 
-  /// Directory holding the downloaded speech model files.
+  /// Directory holding the downloaded speech model files, isolated per
+  /// model id so switching models never mixes incompatible files.
   static Future<String> speechDir() async {
     final override = debugPathOverride;
-    if (override != null) return '$override/../speech';
+    if (override != null) return '$override/../speech/$speechModelId';
     _cachedDir ??= (await getApplicationSupportDirectory()).path;
-    return '$_cachedDir/$speechDirName';
+    return '$_cachedDir/$speechDirName/$speechModelId';
   }
 
   /// Partial download target, kept for resuming interrupted downloads.
@@ -66,5 +73,28 @@ class ModelService {
       if (!f.existsSync() || f.lengthSync() == 0) return false;
     }
     return true;
+  }
+
+  /// Deletes leftovers from previously active speech models so abandoned
+  /// downloads don't squat storage. Best-effort; no-op in tests.
+  static Future<void> sweepStaleSpeechModels() async {
+    if (debugPathOverride != null) return;
+    _cachedDir ??= (await getApplicationSupportDirectory()).path;
+    final root = Directory('$_cachedDir/$speechDirName');
+    if (!root.existsSync()) return;
+    for (final entry in root.listSync()) {
+      if (entry.path.endsWith('/$speechModelId')) continue;
+      try {
+        entry.deleteSync(recursive: true);
+      } catch (_) {}
+    }
+    for (final name in speechFiles) {
+      final stale = File('${root.path}/$name');
+      if (stale.existsSync()) {
+        try {
+          stale.deleteSync();
+        } catch (_) {}
+      }
+    }
   }
 }

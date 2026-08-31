@@ -72,7 +72,7 @@ class ModelSetupScreen extends StatelessWidget {
                         SizedBox(height: 26),
                         _InfoRow(
                           emoji: '📦',
-                          label: '~760 MB',
+                          label: '~1.2 GB',
                           sub: 'Parser + speech models, downloaded once',
                         ),
                         SizedBox(height: 10),

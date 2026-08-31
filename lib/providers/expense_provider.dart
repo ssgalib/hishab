@@ -148,6 +148,7 @@ class ExpenseProvider extends ChangeNotifier {
           ? ModelState.ready
           : ModelState.missing;
       _speechDir = await ModelService.speechDir();
+      await ModelService.sweepStaleSpeechModels();
       _speechState = await ModelService.isSpeechDownloaded()
           ? ModelState.ready
           : ModelState.missing;
