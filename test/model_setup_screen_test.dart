@@ -52,7 +52,7 @@ void main() {
     await pump(tester, downloadRun: ({required url, required savePath, required onProgress, required isCancelled}) async {});
 
     expect(find.text('One-time setup'), findsOneWidget);
-    expect(find.text('~760 MB'), findsOneWidget);
+    expect(find.text('~1.2 GB'), findsOneWidget);
       expect(find.text('Parser + speech models, downloaded once'), findsOneWidget);
     expect(find.text('Download model — free'), findsOneWidget);
     expect(find.text("I'll do this later"), findsOneWidget);
