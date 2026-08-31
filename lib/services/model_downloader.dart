@@ -31,6 +31,10 @@ class ModelDownloader {
     String? url,
   }) async {
     final part = File('$savePath.part');
+    // The target directory may not exist yet (e.g. first speech-model
+    // download) — create it or every write below fails.
+    final parentDir = part.parent;
+    if (!parentDir.existsSync()) parentDir.createSync(recursive: true);
     var resumeFrom = 0;
     if (await part.exists()) {
       resumeFrom = await part.length();
