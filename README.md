@@ -12,6 +12,25 @@ a structured record. No account, no cloud, no internet. Everything stays on your
   <img src="screenshots/01-onboarding-welcome.png" width="200" alt="Onboarding welcome" />
 </p>
 
+## Requirements
+
+**To use the app**
+
+- **Android 8.0 (API 26) or newer** — phone or tablet (arm64-v8a, armeabi-v7a, x86_64)
+- **~1.5 GB of free storage** — app (~150 MB) + parser model (~513 MB) + your data
+- **4 GB of RAM or more recommended** — the parser runs a 270M-parameter model in memory
+- **Microphone permission** — for voice entry (asked on first use)
+- **Internet once** — to download the parser model (~513 MB, Wi-Fi recommended);
+  everything after that is fully offline
+- **English speech input** — voice entry uses Android's built-in SpeechRecognizer
+  (en-US), which requires a speech service on the device (preinstalled on
+  virtually all Android phones)
+
+**To build from source**
+
+- Flutter SDK (Dart ^3.13 — see `pubspec.yaml`) and the Android SDK
+- No model files needed up front; the app downloads the parser on first run
+
 ## How it works
 
 ```
@@ -57,10 +76,9 @@ to replace it.
 
 ## Build & run
 
-Requirements: Flutter SDK, Android SDK (minSdk 26). The APK is now a small
-shell (~110 MB fat / ~30 MB per-ABI) — the voice model is **not** bundled.
-On first run the app walks through onboarding, then a one-time setup screen
-downloads the model from
+The APK is a shell (~148 MB) — the parser model is **not** bundled. On first
+run the app walks through onboarding, then a one-time setup screen downloads
+the model from
 [Hugging Face](https://huggingface.co/ssgalib/expense-tracker-gemma)
 (progress, cancel, and resume are supported). The model is stored in the
 app's internal `files/models/` directory; v1.0 installs are migrated from
