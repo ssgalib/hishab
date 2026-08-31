@@ -17,9 +17,6 @@ dependencies:
   permission_handler: ^11.0.0
   fl_chart: ^1.2.0
   share_plus: ^13.3.0
-  sherpa_onnx: ^1.13.6
-  record: ^7.1.1
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

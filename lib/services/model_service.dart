@@ -13,19 +13,10 @@ class ModelService {
 
   static const modelFileName = 'model.onnx';
   static const modelDirName = 'models';
-  static const speechDirName = 'speech';
 
-  /// Which speech model is active. Swapping models means changing this id,
-  /// the file list, and the base URL in [ModelDownloader].
-  static const speechModelId = 'nemo-parakeet-tdt-0.6b-v2-int8';
-
-  /// The files that make up the active speech model.
-  static const speechFiles = [
-    'encoder.int8.onnx',
-    'decoder.int8.onnx',
-    'joiner.int8.onnx',
-    'tokens.txt',
-  ];
+  /// Directories left behind by the 1.2–1.3 third-party speech-model
+  /// experiments (SenseVoice/Whisper/Parakeet).
+  static const _legacyDirs = ['speech', 'whisper'];
 
   @visibleForTesting
   static String? debugPathOverride;
@@ -38,15 +29,6 @@ class ModelService {
     if (override != null) return override;
     _cachedDir ??= (await getApplicationSupportDirectory()).path;
     return '$_cachedDir/$modelDirName/$modelFileName';
-  }
-
-  /// Directory holding the downloaded speech model files, isolated per
-  /// model id so switching models never mixes incompatible files.
-  static Future<String> speechDir() async {
-    final override = debugPathOverride;
-    if (override != null) return '$override/../speech/$speechModelId';
-    _cachedDir ??= (await getApplicationSupportDirectory()).path;
-    return '$_cachedDir/$speechDirName/$speechModelId';
   }
 
   /// Partial download target, kept for resuming interrupted downloads.
@@ -64,37 +46,22 @@ class ModelService {
     return file.existsSync() && file.lengthSync() > 0;
   }
 
-  /// True when all speech-model files are present.
-  static Future<bool> isSpeechDownloaded() async {
-    final dir = Directory(await speechDir());
-    if (!dir.existsSync()) return false;
-    for (final name in speechFiles) {
-      final f = File('${dir.path}/$name');
-      if (!f.existsSync() || f.lengthSync() == 0) return false;
-    }
-    return true;
-  }
-
-  /// Deletes leftovers from previously active speech models so abandoned
-  /// downloads don't squat storage. Best-effort; no-op in tests.
-  static Future<void> sweepStaleSpeechModels() async {
-    if (debugPathOverride != null) return;
-    _cachedDir ??= (await getApplicationSupportDirectory()).path;
-    final root = Directory('$_cachedDir/$speechDirName');
-    if (!root.existsSync()) return;
-    for (final entry in root.listSync()) {
-      if (entry.path.endsWith('/$speechModelId')) continue;
-      try {
-        entry.deleteSync(recursive: true);
-      } catch (_) {}
-    }
-    for (final name in speechFiles) {
-      final stale = File('${root.path}/$name');
-      if (stale.existsSync()) {
-        try {
-          stale.deleteSync();
-        } catch (_) {}
+  /// Deletes speech-model downloads left behind by the 1.2–1.3 experiments
+  /// (~900 MB). Best-effort; safe to call repeatedly; no-op in tests.
+  static Future<void> deleteExperimentalSpeechDownloads() async {
+    try {
+      if (debugPathOverride != null) return;
+      _cachedDir ??= (await getApplicationSupportDirectory()).path;
+      for (final name in _legacyDirs) {
+        final dir = Directory('$_cachedDir/$name');
+        if (dir.existsSync()) {
+          try {
+            dir.deleteSync(recursive: true);
+          } catch (_) {}
+        }
       }
+    } catch (_) {
+      // Storage probing must never stall boot.
     }
   }
 }

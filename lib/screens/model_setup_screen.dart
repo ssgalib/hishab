@@ -59,9 +59,9 @@ class ModelSetupScreen extends StatelessWidget {
                         ),
                         SizedBox(height: 10),
                         Text(
-                          'To understand your voice, Hishab downloads two AI '
-                          'models. They run entirely on your phone — never '
-                          'leave your device.',
+                          'To understand your voice, Hishab needs an AI '
+                          'model. It runs entirely on your phone — never '
+                          'leaves your device.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 13,
@@ -72,8 +72,8 @@ class ModelSetupScreen extends StatelessWidget {
                         SizedBox(height: 26),
                         _InfoRow(
                           emoji: '📦',
-                          label: '~1.2 GB',
-                          sub: 'Parser + speech models, downloaded once',
+                          label: '~537 MB',
+                          sub: 'Downloaded once, stored on device',
                         ),
                         SizedBox(height: 10),
                         _InfoRow(
@@ -96,7 +96,7 @@ class ModelSetupScreen extends StatelessWidget {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: _ActionArea(provider: provider),
+                child: _ActionArea(state: provider.modelState),
               ),
             ],
           ),
@@ -182,100 +182,31 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-/// Pinned bottom area that swaps with the combined model state.
+/// Pinned bottom area that swaps with the model state.
 class _ActionArea extends StatelessWidget {
-  const _ActionArea({required this.provider});
+  const _ActionArea({required this.state});
 
-  final ExpenseProvider provider;
+  final ModelState state;
 
   @override
   Widget build(BuildContext context) {
-    final p = provider;
+    final provider = context.watch<ExpenseProvider>();
     return Padding(
       padding: EdgeInsets.fromLTRB(
           20, 14, 20, 30 + MediaQuery.paddingOf(context).bottom),
-      child: switch (p) {
-        _ when p.modelState == ModelState.downloading => _Progress(
-            label: 'Downloading parser… ${_mb(p.modelReceived)} / ${_mb(p.modelTotal ?? 0)}',
-            received: p.modelReceived,
-            total: p.modelTotal,
-            onCancel: p.cancelModelDownload,
+      child: switch (state) {
+        ModelState.downloading => _Downloading(
+            received: provider.modelReceived,
+            total: provider.modelTotal,
+            onCancel: provider.cancelModelDownload,
           ),
-        _ when p.speechState == ModelState.downloading => _Progress(
-            label:
-                'Downloading speech model… ${_mb(p.speechReceived)} / ${_mb(p.speechTotal ?? 0)}',
-            received: p.speechReceived,
-            total: p.speechTotal,
-            onCancel: p.cancelModelDownload,
+        ModelState.ready => const _Complete(),
+        ModelState.error => _Error(
+            message: provider.modelError,
+            onRetry: provider.startModelDownload,
           ),
-        _ when p.allModelsReady => const _Complete(),
-        _ when p.modelState == ModelState.error => _Error(
-            message: p.modelError,
-            onRetry: p.startModelDownload,
-          ),
-        _ when p.speechState == ModelState.error => _Error(
-            message: p.speechError,
-            onRetry: p.startModelDownload,
-          ),
-        _ => _Idle(onDownload: p.startModelDownload),
+        _ => _Idle(onDownload: provider.startModelDownload),
       },
-    );
-  }
-
-  static String _mb(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
-}
-
-class _Progress extends StatelessWidget {
-  const _Progress({
-    required this.label,
-    required this.received,
-    required this.total,
-    required this.onCancel,
-  });
-
-  final String label;
-  final int received;
-  final int? total;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    final progress =
-        total != null && total! > 0 ? (received / total!).clamp(0.0, 1.0) : null;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: SizedBox(
-            height: 6,
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
-              backgroundColor: AppColors.progressTrack,
-              color: AppColors.accent,
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, color: AppColors.muted),
-        ),
-        GestureDetector(
-          onTap: onCancel,
-          child: const Padding(
-            padding: EdgeInsets.only(top: 12, bottom: 4),
-            child: Text(
-              'Cancel',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppColors.muted),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -299,6 +230,63 @@ class _Idle extends StatelessWidget {
             padding: EdgeInsets.only(top: 12, bottom: 4),
             child: Text(
               "I'll do this later",
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Downloading extends StatelessWidget {
+  const _Downloading({
+    required this.received,
+    required this.total,
+    required this.onCancel,
+  });
+
+  final int received;
+  final int? total;
+  final VoidCallback onCancel;
+
+  String _mb(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
+
+  @override
+  Widget build(BuildContext context) {
+    final progress =
+        total != null && total! > 0 ? (received / total!).clamp(0.0, 1.0) : null;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: SizedBox(
+            height: 6,
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: AppColors.progressTrack,
+              color: AppColors.accent,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          total != null
+              ? 'Downloading… ${_mb(received)} / ${_mb(total!)}'
+              : 'Downloading… ${_mb(received)}',
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12, color: AppColors.muted),
+        ),
+        GestureDetector(
+          onTap: onCancel,
+          child: const Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 4),
+            child: Text(
+              'Cancel',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: AppColors.muted),
             ),
