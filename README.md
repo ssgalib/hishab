@@ -17,7 +17,7 @@ a structured record. No account, no cloud, no internet. Everything stays on your
 ```
 You speak
     ↓
-Android SpeechRecognizer (on-device, en-US)
+Streaming Zipformer ASR — bundled (42 MB), runs on-device via sherpa-onnx
     ↓
 Gemma 3 270M, fine-tuned — running locally via ONNX Runtime
     ↓
@@ -26,16 +26,18 @@ Gemma 3 270M, fine-tuned — running locally via ONNX Runtime
 SQLite (sqflite) → glass UI
 ```
 
-The model runs entirely on the phone. Speech recognition uses Android's
-on-device recognizer. Expense data never touches the network — the only time
-the app uses the internet is the **one-time model download** (~513 MB from
-Hugging Face, with a terms-and-progress screen, resumable). Existing v1.0
-installs have their model migrated automatically.
+Both AI stages run entirely on the phone: speech recognition uses a bundled
+streaming Zipformer model (sherpa-onnx, live partial results, no Google
+speech service), and expense data never touches the network — the only time
+the app uses the internet is the **one-time parser-model download** (~513 MB
+from Hugging Face, with a terms-and-progress screen, resumable). Existing
+v1.0 installs have their model migrated automatically.
 
 ## Features
 
 - **Voice entry with live caption** — tap the mic, watch your words stream in,
-  review the parsed expense, save. Tap to stop, 20s timeout, friendly error recovery.
+  review the parsed expense, save. Tap to stop, silence auto-finalizes, 20s
+  cap, friendly error recovery.
 - **Review before save** — every parsed expense opens a confirm sheet; incomplete
   parses ("Almost there — no amount heard") land pre-filled for a quick fix. A
   price the model drops into `quantity` is moved back to `amount` automatically.
@@ -78,9 +80,14 @@ flutter test integration_test -d <device>   # on-device E2E (real inference)
 
 ## Notes
 
-- The model is FP16 (~513 MB): INT8/INT4 quantization broke Gemma 3's
-  soft-capping, so the full-precision model ships via the one-time download
-  instead of the APK.
+- Two on-device models: a **streaming Zipformer ASR** (bundled, ~42 MB) and
+  the **Gemma 3 270M parser** (FP16 ~513 MB — INT8/INT4 quantization broke
+  Gemma 3's soft-capping — downloaded once from Hugging Face instead of
+  being bundled).
+- The sherpa_onnx and onnxruntime-android packages both bundle a
+  `libonnxruntime.so` under different versions. `scripts/patch_sherpa_android.py`
+  renames sherpa's copy to `libsherpa_ort.so` (in-place ELF patch) so the two
+  runtimes coexist — re-run it after upgrading the sherpa_onnx packages.
 - Inference runs an autoregressive greedy decode loop in Kotlin
   (`OnnxChannel.kt`), stopping at `<end_of_turn>`.
 - The Dart side implements the Gemma BPE tokenizer (`lib/tokenizer/`) and a
