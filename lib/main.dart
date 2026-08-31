@@ -181,7 +181,6 @@ class _AppState extends State<App> {
   }
 
   /// Called when the mic is tapped while listening: stops the recognizer.
-  /// Called when the mic is tapped while listening: stops the recognizer.
   /// The pending [SpeechChannel.startListening] future then completes (or the
   /// Dart-side timeout fires) and the flow unwinds gracefully.
   Future<void> _stopListening() async {
@@ -212,7 +211,7 @@ class _AppState extends State<App> {
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigatorKey,
       theme: AppTheme.light,
-      home: onboarding == null
+      home: onboarding == null || provider.modelState == ModelState.checking
           ? const Scaffold(
               backgroundColor: AppColors.bg,
               body: SizedBox.expand(),
@@ -233,6 +232,17 @@ class _AppState extends State<App> {
     final media = MediaQuery.of(context);
     final listening = provider.isListening;
     final processing = provider.isProcessing;
+    final modelReady = provider.modelReady;
+
+    void openModelSetup() {
+      final navigatorContext = _navigatorKey.currentContext;
+      if (navigatorContext == null) return;
+      Navigator.of(navigatorContext).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const ModelSetupScreen(popWhenReady: true),
+        ),
+      );
+    }
 
     return Scaffold(
       extendBody: true,
@@ -274,9 +284,13 @@ class _AppState extends State<App> {
                       : processing
                       ? MicState.processing
                       : MicState.idle,
-                  onTap: listening
-                      ? _stopListening
-                      : _handleMicPressed,
+                  // Without the parser model the voice flow cannot run —
+                  // route the tap to the setup screen instead.
+                  onTap: modelReady
+                      ? (listening
+                          ? _stopListening
+                          : _handleMicPressed)
+                      : openModelSetup,
                 ),
                 Positioned(
                   left: (media.size.width - 72) / 2 - 94,

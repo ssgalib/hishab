@@ -6,8 +6,7 @@ import io.flutter.embedding.engine.FlutterEngine
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        // Speech recognition moved to Dart (sherpa_onnx plugin + bundled
-        // streaming Zipformer). Only the Gemma ONNX channel stays native.
+        SpeechChannel(this, flutterEngine.dartExecutor.binaryMessenger)
         OnnxChannel(this, flutterEngine.dartExecutor.binaryMessenger)
     }
 }

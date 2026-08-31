@@ -38,7 +38,6 @@ flutter:
   uses-material-design: true
   assets:
     - assets/tokenizer/
-    - assets/asr/
     - assets/hishab-icon.png
   fonts:
     - family: IBM Plex Mono

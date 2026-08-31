@@ -22,15 +22,17 @@ Widget wrap(Widget child, ExpenseProvider provider) {
 /// The redesigned screens put the chart + search above the ledger, so a
 /// taller-than-default surface keeps list rows inside the finder viewport.
 Future<void> useTallSurface(WidgetTester tester) async {
-  await tester.binding.setSurfaceSize(const Size(800, 1600));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
+  tester.view.physicalSize = const Size(800, 1600);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
 }
 
 /// Phone-like surface for sheet tests so the category grid lays out at
 /// realistic chip sizes.
 Future<void> usePhoneSurface(WidgetTester tester) async {
-  await tester.binding.setSurfaceSize(const Size(400, 900));
-  addTearDown(() => tester.binding.setSurfaceSize(null));
+  tester.view.physicalSize = const Size(400, 900);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.reset);
 }
 
 Expense _e({
@@ -39,15 +41,19 @@ Expense _e({
   String? quantity = '3 piece',
   int amount = 50,
   String category = 'food',
-}) =>
-    Expense(
-      id: id,
-      item: item,
-      quantity: quantity,
-      amount: amount,
-      category: category,
-      createdAt: DateTime(2026, 8, 15, 10, 30),
-    );
+}) {
+  // Always inside the current month so the "This month" default filter
+  // keeps the fixtures visible no matter when the suite runs.
+  final now = DateTime.now();
+  return Expense(
+    id: id,
+    item: item,
+    quantity: quantity,
+    amount: amount,
+    category: category,
+    createdAt: DateTime(now.year, now.month, 15, 10, 30),
+  );
+}
 
 /// Records deletions instead of hitting the database.
 class _SpyProvider extends ExpenseProvider {
@@ -143,7 +149,20 @@ void main() {
         ..debugSetExpenses([_e(id: 1), _e(id: 2, item: 'bus fare')]);
       await tester.pumpWidget(wrap(const HistoryScreen(), provider));
       await tester.pumpAndSettle();
+      debugPrint('SURFACE: ${tester.view.physicalSize}');
+      debugPrint('provider expenses: ${provider.expenses.length} '
+          'first: ${provider.expenses.firstOrNull?.item} '
+          'date: ${provider.expenses.firstOrNull?.createdAt}');
+      debugPrint('eggs onstage: ' '${find.text('eggs').evaluate().length}'
+          ' offstage: ' '${find.text('eggs', skipOffstage: false).evaluate().length}');
+      debugPrint('exceptions: ${tester.takeException()}');
+      final screenProvider = tester.element(find.byType(HistoryScreen)).read<ExpenseProvider>();
+      debugPrint('same instance: ${identical(screenProvider, provider)} '
+          'screen expenses: ${screenProvider.expenses.length} '
+          'screen state: ${screenProvider.modelState}');
 
+      await tester.ensureVisible(find.text('eggs', skipOffstage: false));
+      await tester.pumpAndSettle();
       await tester.drag(find.text('eggs'), const Offset(-500, 0));
       await tester.pumpAndSettle();
 
@@ -164,6 +183,8 @@ void main() {
       await tester.pumpWidget(wrap(const HomeScreen(), provider));
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.text('eggs', skipOffstage: false));
+      await tester.pumpAndSettle();
       await tester.drag(find.text('eggs'), const Offset(-500, 0));
       await tester.pumpAndSettle();
 
@@ -178,6 +199,9 @@ void main() {
     testWidgets('shows today and this-month totals', (tester) async {
       await useTallSurface(tester);
       final now = DateTime.now();
+      // Pick an "earlier this month" day that can never collide with today
+      // (the suite must pass on the 1st of the month too).
+      final otherDay = now.day == 1 ? 2 : 1;
       Expense at(DateTime d) => Expense(
             item: 'x',
             amount: 100,
@@ -188,7 +212,7 @@ void main() {
         ..debugSetExpenses([
           at(DateTime(now.year, now.month, now.day)),
           at(DateTime(now.year, now.month, now.day).add(const Duration(hours: 2))),
-          at(DateTime(now.year, now.month, 1)),
+          at(DateTime(now.year, now.month, otherDay)),
           at(DateTime(now.year, now.month - 1, 15)),
         ]);
       await tester.pumpWidget(wrap(const HomeScreen(), provider));
@@ -443,16 +467,20 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.byIcon(Icons.calendar_today));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('20'));
+      // Pick TODAY — always selectable (the picker clamps to past dates).
+      await tester.tap(find.text('${DateTime.now().day}'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('OK'));
       await tester.pumpAndSettle();
 
+      await tester.ensureVisible(find.textContaining('Save ৳'));
+      await tester.pumpAndSettle();
       await tester.tap(find.textContaining('Save ৳'));
       await tester.pumpAndSettle();
 
       expect(result, isNotNull);
-      expect(result!.createdAt, DateTime(2026, 8, 20));
+      final now = DateTime.now();
+      expect(result!.createdAt, DateTime(now.year, now.month, now.day));
     });
 
     testWidgets('save stays disabled without item and amount',
