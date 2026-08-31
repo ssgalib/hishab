@@ -199,7 +199,7 @@ class _AppState extends State<App> {
         onboarding == true && !provider.modelReady && !provider.modelLater;
 
     final checking = provider.modelState == ModelState.checking ||
-        provider.whisperState == ModelState.checking;
+        provider.speechState == ModelState.checking;
 
     return MaterialApp(
       title: 'Hishab',

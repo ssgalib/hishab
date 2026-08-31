@@ -12,9 +12,9 @@ class ModelDownloader {
   static const modelUrl =
       'https://huggingface.co/ssgalib/expense-tracker-gemma/resolve/main/model.onnx';
 
-  /// Base URL of the speech (Whisper) model files on Hugging Face.
-  static const whisperBaseUrl =
-      'https://huggingface.co/csukuangfj/sherpa-onnx-whisper-base.en/resolve/main';
+  /// Base URL of the speech (SenseVoice) model files on Hugging Face.
+  static const speechBaseUrl =
+      'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/main';
 
   /// Download [url] to [savePath].
   ///

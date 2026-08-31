@@ -72,7 +72,7 @@ class ModelSetupScreen extends StatelessWidget {
                         SizedBox(height: 26),
                         _InfoRow(
                           emoji: '📦',
-                          label: '~675 MB',
+                          label: '~760 MB',
                           sub: 'Parser + speech models, downloaded once',
                         ),
                         SizedBox(height: 10),
@@ -201,11 +201,11 @@ class _ActionArea extends StatelessWidget {
             total: p.modelTotal,
             onCancel: p.cancelModelDownload,
           ),
-        _ when p.whisperState == ModelState.downloading => _Progress(
+        _ when p.speechState == ModelState.downloading => _Progress(
             label:
-                'Downloading speech model… ${_mb(p.whisperReceived)} / ${_mb(p.whisperTotal ?? 0)}',
-            received: p.whisperReceived,
-            total: p.whisperTotal,
+                'Downloading speech model… ${_mb(p.speechReceived)} / ${_mb(p.speechTotal ?? 0)}',
+            received: p.speechReceived,
+            total: p.speechTotal,
             onCancel: p.cancelModelDownload,
           ),
         _ when p.allModelsReady => const _Complete(),
@@ -213,8 +213,8 @@ class _ActionArea extends StatelessWidget {
             message: p.modelError,
             onRetry: p.startModelDownload,
           ),
-        _ when p.whisperState == ModelState.error => _Error(
-            message: p.whisperError,
+        _ when p.speechState == ModelState.error => _Error(
+            message: p.speechError,
             onRetry: p.startModelDownload,
           ),
         _ => _Idle(onDownload: p.startModelDownload),

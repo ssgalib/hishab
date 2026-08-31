@@ -55,12 +55,12 @@ class ExpenseProvider extends ChangeNotifier {
   bool _cancelRequested = false;
   DateTime _lastProgressNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
-  ModelState _whisperState = ModelState.checking;
-  int _whisperReceived = 0;
-  int? _whisperTotal;
-  String? _whisperError;
-  String? _whisperDir;
-  int _whisperFile = 0;
+  ModelState _speechState = ModelState.checking;
+  int _speechReceived = 0;
+  int? _speechTotal;
+  String? _speechError;
+  String? _speechDir;
+  int _speechFile = 0;
 
   List<Expense> get expenses => _expenses;
   bool get isListening => _isListening;
@@ -79,18 +79,18 @@ class ExpenseProvider extends ChangeNotifier {
   int get modelReceived => _modelReceived;
   int? get modelTotal => _modelTotal;
   String? get modelError => _modelError;
-  ModelState get whisperState => _whisperState;
+  ModelState get speechState => _speechState;
 
   /// True when the accent-robust final-pass speech model is on the device.
-  bool get whisperReady => _whisperState == ModelState.ready;
-  int get whisperReceived => _whisperReceived;
-  int? get whisperTotal => _whisperTotal;
-  String? get whisperError => _whisperError;
-  int get whisperFile => _whisperFile;
-  int get whisperFileCount => ModelService.whisperFiles.length;
+  bool get speechReady => _speechState == ModelState.ready;
+  int get speechReceived => _speechReceived;
+  int? get speechTotal => _speechTotal;
+  String? get speechError => _speechError;
+  int get speechFile => _speechFile;
+  int get speechFileCount => ModelService.speechFiles.length;
 
   /// Everything the voice pipeline needs is on the device.
-  bool get allModelsReady => modelReady && whisperReady;
+  bool get allModelsReady => modelReady && speechReady;
 
   /// Text heard so far (partial results stream in while listening, then the
   /// final recognition when processing starts). Drives the voice caption.
@@ -147,18 +147,26 @@ class ExpenseProvider extends ChangeNotifier {
       _modelState = await ModelService.isDownloaded()
           ? ModelState.ready
           : ModelState.missing;
-      _whisperDir = await ModelService.whisperDir();
-      _whisperState = await ModelService.isWhisperDownloaded()
+      _speechDir = await ModelService.speechDir();
+      _speechState = await ModelService.isSpeechDownloaded()
           ? ModelState.ready
           : ModelState.missing;
-      if (_whisperState == ModelState.ready) {
-        await SherpaSpeech.loadWhisperOffline(_whisperDir!);
+      if (_speechState == ModelState.ready) {
+        await SherpaSpeech.loadOfflineRecognizer(_speechDir!);
+      }
+      // Best-effort cleanup of the retired Whisper download (v1.3).
+      final legacy = Directory(
+          '${await ModelService.modelPath()}/../whisper');
+      if (legacy.existsSync()) {
+        try {
+          legacy.deleteSync(recursive: true);
+        } catch (_) {}
       }
     } catch (_) {
       // Path resolution failed (storage unavailable?) — keep the gate closed
       // so the user sees the setup screen instead of a broken mic.
       _modelState = ModelState.missing;
-      _whisperState = ModelState.missing;
+      _speechState = ModelState.missing;
     }
     notifyListeners();
   }
@@ -167,7 +175,7 @@ class ExpenseProvider extends ChangeNotifier {
   /// then the Whisper speech model. Skips anything already ready.
   Future<void> startModelDownload() async {
     if (_modelState == ModelState.downloading ||
-        _whisperState == ModelState.downloading) {
+        _speechState == ModelState.downloading) {
       return;
     }
     _cancelRequested = false;
@@ -207,41 +215,41 @@ class ExpenseProvider extends ChangeNotifier {
       notifyListeners();
     }
 
-    if (!whisperReady && _whisperDir != null) {
-      _whisperState = ModelState.downloading;
-      _whisperReceived = 0;
-      _whisperTotal = null;
-      _whisperError = null;
+    if (!speechReady && _speechDir != null) {
+      _speechState = ModelState.downloading;
+      _speechReceived = 0;
+      _speechTotal = null;
+      _speechError = null;
       notifyListeners();
       try {
-        final files = ModelService.whisperFiles;
+        final files = ModelService.speechFiles;
         for (var i = 0; i < files.length; i++) {
-          final target = '$_whisperDir/${files[i]}';
+          final target = '$_speechDir/${files[i]}';
           final existing = File(target);
           if (existing.existsSync() && existing.lengthSync() > 0) continue;
-          _whisperFile = i;
-          _whisperReceived = 0;
-          _whisperTotal = null;
+          _speechFile = i;
+          _speechReceived = 0;
+          _speechTotal = null;
           notifyListeners();
           await _downloadModel(
-            url: '${ModelDownloader.whisperBaseUrl}/${files[i]}',
+            url: '${ModelDownloader.speechBaseUrl}/${files[i]}',
             savePath: target,
             onProgress: (r, t) {
-              _whisperReceived = r;
-              _whisperTotal = t;
+              _speechReceived = r;
+              _speechTotal = t;
               _throttledNotify();
             },
             isCancelled: () => _cancelRequested,
           );
         }
-        _whisperState = ModelState.ready;
+        _speechState = ModelState.ready;
         _lastProgressNotify = DateTime.now();
-        await SherpaSpeech.loadWhisperOffline(_whisperDir!);
+        await SherpaSpeech.loadOfflineRecognizer(_speechDir!);
       } on ModelCancelledException {
-        _whisperState = ModelState.missing;
+        _speechState = ModelState.missing;
       } catch (e) {
-        _whisperState = ModelState.error;
-        _whisperError = e.toString();
+        _speechState = ModelState.error;
+        _speechError = e.toString();
       }
       notifyListeners();
     }

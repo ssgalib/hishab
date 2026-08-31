@@ -80,28 +80,27 @@ class SherpaSpeech {
 
   static bool get whisperLoaded => _offline != null;
 
-  /// Creates the offline (Whisper) final-pass recognizer once its model
-  /// files are downloaded. Idempotent, never throws — when anything is
+  /// Creates the offline final-pass recognizer (SenseVoice Small — strong
+  /// on Asian-accented English) once its model files are downloaded. Idempotent, never throws — when anything is
   /// missing or fails, recognition simply falls back to the streaming
   /// transcript.
-  static Future<void> loadWhisperOffline(String dir) async {
+  static Future<void> loadOfflineRecognizer(String dir) async {
     try {
       if (_offline != null || _offlineFailed) return;
       await ensureLoaded();
       if (_offlineFailed) return;
-      for (final name in ModelService.whisperFiles) {
+      for (final name in ModelService.speechFiles) {
         if (!File('$dir/$name').existsSync()) return;
       }
       _offline = sherpa.OfflineRecognizer(
         sherpa.OfflineRecognizerConfig(
           model: sherpa.OfflineModelConfig(
-            whisper: sherpa.OfflineWhisperModelConfig(
-              encoder: '$dir/base.en-encoder.int8.onnx',
-              decoder: '$dir/base.en-decoder.int8.onnx',
+            senseVoice: sherpa.OfflineSenseVoiceModelConfig(
+              model: '$dir/model.int8.onnx',
               language: 'en',
-              task: 'transcribe',
+              useInverseTextNormalization: true,
             ),
-            tokens: '$dir/base.en-tokens.txt',
+            tokens: '$dir/tokens.txt',
             numThreads: 2,
             debug: false,
           ),
