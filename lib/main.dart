@@ -109,11 +109,13 @@ class _AppState extends State<App> {
     } on TimeoutException {
       if (!mounted) return;
       provider.setListening(false);
+      provider.setProcessing(false);
       _snack("Didn't hear anything. Tap the mic and try again.");
       return;
     } on Exception catch (_) {
       if (!mounted) return;
       provider.setListening(false);
+      provider.setProcessing(false);
       _snack('Microphone failed. Close other apps using it and try again.');
       return;
     }
@@ -121,6 +123,7 @@ class _AppState extends State<App> {
     provider.setListening(false);
 
     if (spokenText.isEmpty) {
+      provider.setProcessing(false);
       _snack('No speech detected');
       return;
     }
@@ -195,12 +198,15 @@ class _AppState extends State<App> {
     final showSetup =
         onboarding == true && !provider.modelReady && !provider.modelLater;
 
+    final checking = provider.modelState == ModelState.checking ||
+        provider.whisperState == ModelState.checking;
+
     return MaterialApp(
       title: 'Hishab',
       debugShowCheckedModeBanner: false,
       navigatorKey: _navigatorKey,
       theme: AppTheme.light,
-      home: onboarding == null || provider.modelState == ModelState.checking
+      home: onboarding == null || checking
           ? const Scaffold(
               backgroundColor: AppColors.bg,
               body: SizedBox.expand(),

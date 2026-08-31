@@ -13,18 +13,34 @@ class ModelService {
 
   static const modelFileName = 'model.onnx';
   static const modelDirName = 'models';
+  static const whisperDirName = 'whisper';
+
+  /// The three files that make up the Whisper Base EN speech model.
+  static const whisperFiles = [
+    'base.en-encoder.int8.onnx',
+    'base.en-decoder.int8.onnx',
+    'base.en-tokens.txt',
+  ];
 
   @visibleForTesting
   static String? debugPathOverride;
 
   static String? _cachedDir;
 
-  /// Absolute path of the downloaded model file.
+  /// Absolute path of the downloaded parser model file.
   static Future<String> modelPath() async {
     final override = debugPathOverride;
     if (override != null) return override;
     _cachedDir ??= (await getApplicationSupportDirectory()).path;
     return '$_cachedDir/$modelDirName/$modelFileName';
+  }
+
+  /// Directory holding the downloaded speech (Whisper) model files.
+  static Future<String> whisperDir() async {
+    final override = debugPathOverride;
+    if (override != null) return '$override/../whisper';
+    _cachedDir ??= (await getApplicationSupportDirectory()).path;
+    return '$_cachedDir/$whisperDirName';
   }
 
   /// Partial download target, kept for resuming interrupted downloads.
@@ -40,5 +56,16 @@ class ModelService {
     }
     final file = File(await modelPath());
     return file.existsSync() && file.lengthSync() > 0;
+  }
+
+  /// True when all speech-model files are present.
+  static Future<bool> isWhisperDownloaded() async {
+    final dir = Directory(await whisperDir());
+    if (!dir.existsSync()) return false;
+    for (final name in whisperFiles) {
+      final f = File('${dir.path}/$name');
+      if (!f.existsSync() || f.lengthSync() == 0) return false;
+    }
+    return true;
   }
 }

@@ -59,9 +59,9 @@ class ModelSetupScreen extends StatelessWidget {
                         ),
                         SizedBox(height: 10),
                         Text(
-                          'To understand your voice, Hishab needs a small AI '
-                          'model. It runs entirely on your phone — never '
-                          'leaves your device.',
+                          'To understand your voice, Hishab downloads two AI '
+                          'models. They run entirely on your phone — never '
+                          'leave your device.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 13,
@@ -72,8 +72,8 @@ class ModelSetupScreen extends StatelessWidget {
                         SizedBox(height: 26),
                         _InfoRow(
                           emoji: '📦',
-                          label: '~537 MB',
-                          sub: 'Downloaded once, stored on device',
+                          label: '~675 MB',
+                          sub: 'Parser + speech models, downloaded once',
                         ),
                         SizedBox(height: 10),
                         _InfoRow(
@@ -96,7 +96,7 @@ class ModelSetupScreen extends StatelessWidget {
                 left: 0,
                 right: 0,
                 bottom: 0,
-                child: _ActionArea(state: provider.modelState),
+                child: _ActionArea(provider: provider),
               ),
             ],
           ),
@@ -182,76 +182,61 @@ class _InfoRow extends StatelessWidget {
   }
 }
 
-/// Pinned bottom area that swaps with the model state.
+/// Pinned bottom area that swaps with the combined model state.
 class _ActionArea extends StatelessWidget {
-  const _ActionArea({required this.state});
+  const _ActionArea({required this.provider});
 
-  final ModelState state;
+  final ExpenseProvider provider;
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<ExpenseProvider>();
+    final p = provider;
     return Padding(
       padding: EdgeInsets.fromLTRB(
           20, 14, 20, 30 + MediaQuery.paddingOf(context).bottom),
-      child: switch (state) {
-        ModelState.downloading => _Downloading(
-            received: provider.modelReceived,
-            total: provider.modelTotal,
-            onCancel: provider.cancelModelDownload,
+      child: switch (p) {
+        _ when p.modelState == ModelState.downloading => _Progress(
+            label: 'Downloading parser… ${_mb(p.modelReceived)} / ${_mb(p.modelTotal ?? 0)}',
+            received: p.modelReceived,
+            total: p.modelTotal,
+            onCancel: p.cancelModelDownload,
           ),
-        ModelState.ready => const _Complete(),
-        ModelState.error => _Error(
-            message: provider.modelError,
-            onRetry: provider.startModelDownload,
+        _ when p.whisperState == ModelState.downloading => _Progress(
+            label:
+                'Downloading speech model… ${_mb(p.whisperReceived)} / ${_mb(p.whisperTotal ?? 0)}',
+            received: p.whisperReceived,
+            total: p.whisperTotal,
+            onCancel: p.cancelModelDownload,
           ),
-        _ => _Idle(onDownload: provider.startModelDownload),
+        _ when p.allModelsReady => const _Complete(),
+        _ when p.modelState == ModelState.error => _Error(
+            message: p.modelError,
+            onRetry: p.startModelDownload,
+          ),
+        _ when p.whisperState == ModelState.error => _Error(
+            message: p.whisperError,
+            onRetry: p.startModelDownload,
+          ),
+        _ => _Idle(onDownload: p.startModelDownload),
       },
     );
   }
+
+  static String _mb(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
 }
 
-class _Idle extends StatelessWidget {
-  const _Idle({required this.onDownload});
-
-  final VoidCallback onDownload;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _PrimaryButton(label: 'Download model — free', onTap: onDownload),
-        GestureDetector(
-          onTap: () =>
-              context.read<ExpenseProvider>().chooseLaterWithoutModel(),
-          child: const Padding(
-            padding: EdgeInsets.only(top: 12, bottom: 4),
-            child: Text(
-              "I'll do this later",
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppColors.muted),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Downloading extends StatelessWidget {
-  const _Downloading({
+class _Progress extends StatelessWidget {
+  const _Progress({
+    required this.label,
     required this.received,
     required this.total,
     required this.onCancel,
   });
 
+  final String label;
   final int received;
   final int? total;
   final VoidCallback onCancel;
-
-  String _mb(int bytes) => '${(bytes / (1024 * 1024)).round()} MB';
 
   @override
   Widget build(BuildContext context) {
@@ -275,9 +260,7 @@ class _Downloading extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Text(
-          total != null
-              ? 'Downloading… ${_mb(received)} / ${_mb(total!)}'
-              : 'Downloading… ${_mb(received)}',
+          label,
           textAlign: TextAlign.center,
           style: const TextStyle(fontSize: 12, color: AppColors.muted),
         ),
@@ -287,6 +270,35 @@ class _Downloading extends StatelessWidget {
             padding: EdgeInsets.only(top: 12, bottom: 4),
             child: Text(
               'Cancel',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.muted),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _Idle extends StatelessWidget {
+  const _Idle({required this.onDownload});
+
+  final VoidCallback onDownload;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _PrimaryButton(label: 'Download model — free', onTap: onDownload),
+        GestureDetector(
+          onTap: () =>
+              context.read<ExpenseProvider>().chooseLaterWithoutModel(),
+          child: const Padding(
+            padding: EdgeInsets.only(top: 12, bottom: 4),
+            child: Text(
+              "I'll do this later",
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 13, color: AppColors.muted),
             ),

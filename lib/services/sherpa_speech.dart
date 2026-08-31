@@ -7,6 +7,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as sherpa;
 
+import 'model_service.dart';
+
 /// On-device streaming speech recognition using sherpa-onnx with a bundled
 /// streaming Zipformer (English, 20M params, INT8) — replaces Android's
 /// SpeechRecognizer entirely.
@@ -28,12 +30,17 @@ class SherpaSpeech {
 
   static bool _bindingsReady = false;
   static sherpa.OnlineRecognizer? _recognizer;
+  static sherpa.OfflineRecognizer? _offline;
+  static bool _offlineFailed = false;
   static sherpa.OnlineStream? _stream;
   static AudioRecorder? _recorder;
   static StreamSubscription<Uint8List>? _micSub;
   static Completer<String>? _pending;
   static void Function(String partial)? _onPartial;
   static String _lastPartial = '';
+  static final List<Float32List> _buffer = [];
+  static int _bufferedSamples = 0;
+  static const _maxBufferedSamples = 16000 * 30; // cap: 30 s of audio
 
   /// Loads the native lib and copies the bundled model to a readable path.
   /// Cheap no-op after the first call; safe to call at boot.
@@ -69,6 +76,40 @@ class SherpaSpeech {
       ),
     );
     _bindingsReady = true;
+  }
+
+  static bool get whisperLoaded => _offline != null;
+
+  /// Creates the offline (Whisper) final-pass recognizer once its model
+  /// files are downloaded. Idempotent, never throws — when anything is
+  /// missing or fails, recognition simply falls back to the streaming
+  /// transcript.
+  static Future<void> loadWhisperOffline(String dir) async {
+    try {
+      if (_offline != null || _offlineFailed) return;
+      await ensureLoaded();
+      if (_offlineFailed) return;
+      for (final name in ModelService.whisperFiles) {
+        if (!File('$dir/$name').existsSync()) return;
+      }
+      _offline = sherpa.OfflineRecognizer(
+        sherpa.OfflineRecognizerConfig(
+          model: sherpa.OfflineModelConfig(
+            whisper: sherpa.OfflineWhisperModelConfig(
+              encoder: '$dir/base.en-encoder.int8.onnx',
+              decoder: '$dir/base.en-decoder.int8.onnx',
+              language: 'en',
+              task: 'transcribe',
+            ),
+            tokens: '$dir/base.en-tokens.txt',
+            numThreads: 2,
+            debug: false,
+          ),
+        ),
+      );
+    } catch (_) {
+      _offlineFailed = true;
+    }
   }
 
   static bool get isReady => _bindingsReady;
@@ -109,6 +150,11 @@ class SherpaSpeech {
         for (var i = 0; i < floats.length; i++) {
           floats[i] = view.getInt16(i * 2, Endian.little) / 32768.0;
         }
+        // Keep the audio for the offline final pass (bounded).
+        if (_bufferedSamples < _maxBufferedSamples) {
+          _buffer.add(floats);
+          _bufferedSamples += floats.length;
+        }
         stream.acceptWaveform(samples: floats, sampleRate: 16000);
         while (recognizer.isReady(stream)) {
           recognizer.decode(stream);
@@ -140,13 +186,42 @@ class SherpaSpeech {
   static Future<void> _finalize() async {
     final stream = _stream;
     final recognizer = _recognizer;
+    var text = '';
     if (stream != null && recognizer != null) {
       stream.inputFinished();
       while (recognizer.isReady(stream)) {
         recognizer.decode(stream);
       }
+      text = recognizer.getResult(stream).text.trim();
     }
-    final text = recognizer?.getResult(stream!).text.trim() ?? '';
+
+    // Final pass: the accent-robust offline model re-recognizes the same
+    // audio; its transcript is what Gemma parses.
+    if (_offline != null && _bufferedSamples > 0) {
+      try {
+        final all = Float32List(_bufferedSamples);
+        var at = 0;
+        for (final chunk in _buffer) {
+          all.setAll(at, chunk);
+          at += chunk.length;
+        }
+        _buffer.clear();
+        _bufferedSamples = 0;
+        final offlineStream = _offline!.createStream();
+        offlineStream.acceptWaveform(samples: all, sampleRate: 16000);
+        _offline!.decode(offlineStream);
+        final offlineText = _offline!.getResult(offlineStream).text.trim();
+        if (offlineText.isNotEmpty) text = offlineText;
+      } catch (_) {
+        _buffer.clear();
+        _bufferedSamples = 0;
+        // Keep the streaming transcript on any offline-pass failure.
+      }
+    } else {
+      _buffer.clear();
+      _bufferedSamples = 0;
+    }
+
     await _micSub?.cancel();
     await _recorder?.stop();
     await _recorder?.dispose();

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 
 import '../models/expense.dart';
@@ -5,11 +7,13 @@ import '../channels/onnx_channel.dart';
 import '../database/db_helper.dart';
 import '../services/model_downloader.dart';
 import '../services/model_service.dart';
+import '../services/sherpa_speech.dart';
 
 /// Lifecycle of the on-device voice model.
 enum ModelState { checking, missing, downloading, ready, error }
 
 typedef ModelDownloadFn = Future<void> Function({
+  required String url,
   required String savePath,
   required void Function(int received, int? total) onProgress,
   required bool Function() isCancelled,
@@ -20,12 +24,13 @@ class ExpenseProvider extends ChangeNotifier {
       : _downloadModel = downloadModel ?? _defaultDownload;
 
   static Future<void> _defaultDownload({
+    required String url,
     required String savePath,
     required void Function(int received, int? total) onProgress,
     required bool Function() isCancelled,
   }) {
     return ModelDownloader.download(
-      url: ModelDownloader.modelUrl,
+      url: url,
       savePath: savePath,
       onProgress: onProgress,
       isCancelled: isCancelled,
@@ -50,6 +55,13 @@ class ExpenseProvider extends ChangeNotifier {
   bool _cancelRequested = false;
   DateTime _lastProgressNotify = DateTime.fromMillisecondsSinceEpoch(0);
 
+  ModelState _whisperState = ModelState.checking;
+  int _whisperReceived = 0;
+  int? _whisperTotal;
+  String? _whisperError;
+  String? _whisperDir;
+  int _whisperFile = 0;
+
   List<Expense> get expenses => _expenses;
   bool get isListening => _isListening;
   bool get isProcessing => _isProcessing;
@@ -67,6 +79,18 @@ class ExpenseProvider extends ChangeNotifier {
   int get modelReceived => _modelReceived;
   int? get modelTotal => _modelTotal;
   String? get modelError => _modelError;
+  ModelState get whisperState => _whisperState;
+
+  /// True when the accent-robust final-pass speech model is on the device.
+  bool get whisperReady => _whisperState == ModelState.ready;
+  int get whisperReceived => _whisperReceived;
+  int? get whisperTotal => _whisperTotal;
+  String? get whisperError => _whisperError;
+  int get whisperFile => _whisperFile;
+  int get whisperFileCount => ModelService.whisperFiles.length;
+
+  /// Everything the voice pipeline needs is on the device.
+  bool get allModelsReady => modelReady && whisperReady;
 
   /// Text heard so far (partial results stream in while listening, then the
   /// final recognition when processing starts). Drives the voice caption.
@@ -123,50 +147,113 @@ class ExpenseProvider extends ChangeNotifier {
       _modelState = await ModelService.isDownloaded()
           ? ModelState.ready
           : ModelState.missing;
+      _whisperDir = await ModelService.whisperDir();
+      _whisperState = await ModelService.isWhisperDownloaded()
+          ? ModelState.ready
+          : ModelState.missing;
+      if (_whisperState == ModelState.ready) {
+        await SherpaSpeech.loadWhisperOffline(_whisperDir!);
+      }
     } catch (_) {
       // Path resolution failed (storage unavailable?) — keep the gate closed
       // so the user sees the setup screen instead of a broken mic.
       _modelState = ModelState.missing;
+      _whisperState = ModelState.missing;
     }
     notifyListeners();
   }
 
+  /// Downloads whatever voice models are missing: the Gemma parser first,
+  /// then the Whisper speech model. Skips anything already ready.
   Future<void> startModelDownload() async {
-    if (_modelState == ModelState.downloading) return;
-    final path = _modelPath;
-    if (path == null) {
-      _modelState = ModelState.error;
-      _modelError = 'Storage unavailable';
-      notifyListeners();
+    if (_modelState == ModelState.downloading ||
+        _whisperState == ModelState.downloading) {
       return;
     }
-    _modelState = ModelState.downloading;
-    _modelReceived = 0;
-    _modelTotal = null;
-    _modelError = null;
     _cancelRequested = false;
-    notifyListeners();
 
-    try {
-      await _downloadModel(
-        savePath: path,
-        onProgress: _onDownloadProgress,
-        isCancelled: () => _cancelRequested,
-      );
-      _modelState = ModelState.ready;
-      _lastProgressNotify = DateTime.now();
-    } on ModelCancelledException {
-      _modelState = ModelState.missing;
-    } catch (e) {
-      _modelState = ModelState.error;
-      _modelError = e.toString();
+    if (!modelReady) {
+      final path = _modelPath;
+      if (path == null) {
+        _modelState = ModelState.error;
+        _modelError = 'Storage unavailable';
+        notifyListeners();
+        return;
+      }
+      _modelState = ModelState.downloading;
+      _modelReceived = 0;
+      _modelTotal = null;
+      _modelError = null;
+      notifyListeners();
+      try {
+        await _downloadModel(
+          url: ModelDownloader.modelUrl,
+          savePath: path,
+          onProgress: _onDownloadProgress,
+          isCancelled: () => _cancelRequested,
+        );
+        _modelState = ModelState.ready;
+        _lastProgressNotify = DateTime.now();
+      } on ModelCancelledException {
+        _modelState = ModelState.missing;
+        notifyListeners();
+        return;
+      } catch (e) {
+        _modelState = ModelState.error;
+        _modelError = e.toString();
+        notifyListeners();
+        return;
+      }
+      notifyListeners();
     }
-    notifyListeners();
+
+    if (!whisperReady && _whisperDir != null) {
+      _whisperState = ModelState.downloading;
+      _whisperReceived = 0;
+      _whisperTotal = null;
+      _whisperError = null;
+      notifyListeners();
+      try {
+        final files = ModelService.whisperFiles;
+        for (var i = 0; i < files.length; i++) {
+          final target = '$_whisperDir/${files[i]}';
+          final existing = File(target);
+          if (existing.existsSync() && existing.lengthSync() > 0) continue;
+          _whisperFile = i;
+          _whisperReceived = 0;
+          _whisperTotal = null;
+          notifyListeners();
+          await _downloadModel(
+            url: '${ModelDownloader.whisperBaseUrl}/${files[i]}',
+            savePath: target,
+            onProgress: (r, t) {
+              _whisperReceived = r;
+              _whisperTotal = t;
+              _throttledNotify();
+            },
+            isCancelled: () => _cancelRequested,
+          );
+        }
+        _whisperState = ModelState.ready;
+        _lastProgressNotify = DateTime.now();
+        await SherpaSpeech.loadWhisperOffline(_whisperDir!);
+      } on ModelCancelledException {
+        _whisperState = ModelState.missing;
+      } catch (e) {
+        _whisperState = ModelState.error;
+        _whisperError = e.toString();
+      }
+      notifyListeners();
+    }
   }
 
   void _onDownloadProgress(int received, int? total) {
     _modelReceived = received;
     _modelTotal = total;
+    _throttledNotify();
+  }
+
+  void _throttledNotify() {
     // Throttle rebuilds: at most ~5/sec.
     final now = DateTime.now();
     if (now.difference(_lastProgressNotify).inMilliseconds >= 200) {

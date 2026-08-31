@@ -49,10 +49,11 @@ void main() {
 
   testWidgets('idle state shows download button and later link',
       (tester) async {
-    await pump(tester, downloadRun: ({required savePath, required onProgress, required isCancelled}) async {});
+    await pump(tester, downloadRun: ({required url, required savePath, required onProgress, required isCancelled}) async {});
 
     expect(find.text('One-time setup'), findsOneWidget);
-    expect(find.text('~537 MB'), findsOneWidget);
+    expect(find.text('~675 MB'), findsOneWidget);
+      expect(find.text('Parser + speech models, downloaded once'), findsOneWidget);
     expect(find.text('Download model — free'), findsOneWidget);
     expect(find.text("I'll do this later"), findsOneWidget);
   });
@@ -61,7 +62,7 @@ void main() {
     final done = Completer<void>();
     final provider = await pump(
       tester,
-      downloadRun: ({required savePath, required onProgress, required isCancelled}) =>
+      downloadRun: ({required url, required savePath, required onProgress, required isCancelled}) =>
           done.future,
     );
 
@@ -80,7 +81,7 @@ void main() {
     final provider = await pump(
       tester,
       downloadRun:
-          ({required savePath, required onProgress, required isCancelled}) async =>
+          ({required url, required savePath, required onProgress, required isCancelled}) async =>
               throw const ModelDownloadException('offline'),
     );
 
@@ -97,7 +98,7 @@ void main() {
     final provider = await pump(
       tester,
       downloadRun:
-          ({required savePath, required onProgress, required isCancelled}) async {},
+          ({required url, required savePath, required onProgress, required isCancelled}) async {},
     );
 
     await tester.tap(find.text("I'll do this later"));
