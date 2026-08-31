@@ -49,6 +49,9 @@ kotlin {
 }
 
 dependencies {
+    // NOTE: scripts/patch_sherpa_android.py renames the libonnxruntime.so
+    // bundled by the sherpa_onnx plugin to libsherpa_ort.so so the two
+    // runtimes coexist. Re-run it after upgrading the sherpa_onnx packages.
     implementation("com.microsoft.onnxruntime:onnxruntime-android:1.20.0")
 }
 

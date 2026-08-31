@@ -27,8 +27,10 @@ void main() {
 
   Future<void> skipWithoutModel() async {
     if (!await ModelService.isDownloaded()) {
+      // markTestSkipped does not halt the body — return right after.
       markTestSkipped(
           'voice model not present on this device — download it once in-app');
+      return;
     }
   }
 

@@ -1,12 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 
 import 'channels/onnx_channel.dart';
-import 'channels/speech_channel.dart';
 import 'models/expense.dart';
 import 'models/expense_parser.dart';
 import 'providers/expense_provider.dart';
@@ -14,6 +12,7 @@ import 'screens/history_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/model_setup_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/sherpa_speech.dart';
 import 'theme/app_theme.dart';
 import 'utils/format.dart';
 import 'widgets/app_bottom_nav.dart';
@@ -96,25 +95,27 @@ class _AppState extends State<App> {
 
     provider.setVoiceText('');
     provider.setListening(true);
-    SpeechChannel.onPartial = provider.setVoiceText;
     String spokenText;
     try {
-      spokenText = await SpeechChannel.startListening().timeout(
+      spokenText = await SherpaSpeech.startListening(
+        onPartial: provider.setVoiceText,
+      ).timeout(
         const Duration(seconds: 20),
+        onTimeout: () {
+          unawaited(SherpaSpeech.stopListening());
+          throw TimeoutException('listening timed out');
+        },
       );
     } on TimeoutException {
-      unawaited(SpeechChannel.stopListening());
       if (!mounted) return;
       provider.setListening(false);
       _snack("Didn't hear anything. Tap the mic and try again.");
       return;
-    } on PlatformException catch (e) {
+    } on Exception catch (_) {
       if (!mounted) return;
       provider.setListening(false);
-      _snack(_sttErrorMessage(e));
+      _snack('Microphone failed. Close other apps using it and try again.');
       return;
-    } finally {
-      SpeechChannel.onPartial = null;
     }
     if (!mounted) return;
     provider.setListening(false);
@@ -181,22 +182,10 @@ class _AppState extends State<App> {
   }
 
   /// Called when the mic is tapped while listening: stops the recognizer.
-  /// The pending [SpeechChannel.startListening] future then completes (or the
-  /// Dart-side timeout fires) and the flow unwinds gracefully.
+  /// The pending [SherpaSpeech.startListening] future then completes with
+  /// the final transcript.
   Future<void> _stopListening() async {
-    await SpeechChannel.stopListening();
-  }
-
-  String _sttErrorMessage(PlatformException e) {
-    final code = int.tryParse(e.message?.split(':').last.trim() ?? '') ?? -1;
-    return switch (code) {
-      6 => "Didn't hear anything. Tap the mic and try again.",
-      7 => "Couldn't understand that. Try speaking more clearly.",
-      8 => 'Recognizer busy — try again in a moment.',
-      1 || 2 || 4 => 'Speech service needs internet, which is unavailable.',
-      9 => 'Microphone permission missing.',
-      _ => 'Speech recognition failed (error $code).',
-    };
+    await SherpaSpeech.stopListening();
   }
 
   @override
