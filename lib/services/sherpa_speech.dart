@@ -98,24 +98,31 @@ class SherpaSpeech {
 
     _micSub = micStream.listen((data) async {
       if (_pending == null || completer.isCompleted) return;
-      // PCM16LE mono -> float in [-1, 1].
-      final samples = Int16List.view(
-          data.buffer, data.offsetInBytes, data.lengthInBytes ~/ 2);
-      final floats = Float32List(samples.length);
-      for (var i = 0; i < samples.length; i++) {
-        floats[i] = samples[i] / 32768.0;
-      }
-      stream.acceptWaveform(samples: floats, sampleRate: 16000);
-      while (recognizer.isReady(stream)) {
-        recognizer.decode(stream);
-      }
-      final text = recognizer.getResult(stream).text.trim();
-      if (text.isNotEmpty && text != _lastPartial) {
-        _lastPartial = text;
-        _onPartial?.call(text);
-      }
-      if (recognizer.isEndpoint(stream)) {
-        await _finalize();
+      try {
+        // Chunks arrive at arbitrary byte offsets/sizes — drop a trailing
+        // odd byte and decode via ByteData (no alignment requirement).
+        final usable = data.lengthInBytes & ~1;
+        if (usable == 0) return;
+        final view = ByteData.view(
+            data.buffer, data.offsetInBytes, usable);
+        final floats = Float32List(usable ~/ 2);
+        for (var i = 0; i < floats.length; i++) {
+          floats[i] = view.getInt16(i * 2, Endian.little) / 32768.0;
+        }
+        stream.acceptWaveform(samples: floats, sampleRate: 16000);
+        while (recognizer.isReady(stream)) {
+          recognizer.decode(stream);
+        }
+        final text = recognizer.getResult(stream).text.trim();
+        if (text.isNotEmpty && text != _lastPartial) {
+          _lastPartial = text;
+          _onPartial?.call(text);
+        }
+        if (recognizer.isEndpoint(stream)) {
+          await _finalize();
+        }
+      } catch (_) {
+        // A malformed chunk must never kill the listening session.
       }
     }, onError: (Object e) {
       _completeIfPending('');
